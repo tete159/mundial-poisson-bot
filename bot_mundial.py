@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 import os, sys, time, threading, requests
 from datetime import datetime
-from scipy.stats import poisson
-from scipy.optimize import fminbound
 from pytz import timezone
+from modelo import predecir   # Poisson + Dixon-Coles + prior historico del Mundial
 
 TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN", "")
 TG_CHAT_ID   = int(os.getenv("TG_CHAT_ID", "0"))
@@ -20,23 +19,7 @@ PASOS = [
     ("under", "Cuota Under 2.5 goles?"),
 ]
 
-# ==================== POISSON ====================
-
-def estimate_xg(over_odds):
-    target = 1 / over_odds
-    def err(xg): return abs((1 - poisson.cdf(2, xg)) - target)
-    return round(fminbound(err, 0.5, 5.0), 2)
-
-def team_xgs(total, o1, o2):
-    p1, p2 = 1/o1, 1/o2
-    return round(total * p1 / (p1+p2), 2), round(total * p2 / (p1+p2), 2)
-
-def top_scorelines(xg1, xg2, n=5):
-    sc = {}
-    for g1 in range(7):
-        for g2 in range(7):
-            sc[f"{g1}-{g2}"] = round(poisson.pmf(g1, xg1) * poisson.pmf(g2, xg2) * 100, 1)
-    return sorted(sc.items(), key=lambda x: x[1], reverse=True)[:n]
+# ==================== ANALISIS ====================
 
 def build_resultado(estado):
     team1 = estado["equipo1"]
@@ -44,12 +27,12 @@ def build_resultado(estado):
     o1, ox, o2 = estado["o1"], estado["ox"], estado["o2"]
     over, under = estado["over"], estado["under"]
 
-    total_xg = estimate_xg(over)
-    xg1, xg2 = team_xgs(total_xg, o1, o2)
-    picks = top_scorelines(xg1, xg2)
+    ranking, (xg1, xg2, total_xg) = predecir(o1, ox, o2, over)
+    picks = ranking[:5]
 
     lineas = [
-        "MUNDIAL 2026 - Analisis Poisson",
+        "MUNDIAL 2026 - Prediccion de marcador",
+        "(Poisson + Dixon-Coles + historico Mundial)",
         "",
         f"{team1} vs {team2}",
         "",
@@ -60,7 +43,7 @@ def build_resultado(estado):
         f"  Over 2.5: {over}  Under 2.5: {under}",
         "",
         f"Goles esperados:",
-        f"  {team1}: {xg1}  |  {team2}: {xg2}",
+        f"  {team1}: {xg1:.2f}  |  {team2}: {xg2:.2f}",
         "",
         "Top resultados:",
     ]
