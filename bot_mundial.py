@@ -92,6 +92,10 @@ def procesar_mensaje(chat_id, text):
         send(chat_id, "Nombre del equipo local?")
         return
 
+    if text == "/proximos":
+        cmd_proximos(chat_id)
+        return
+
     if text in ("/cancelar", "/cancel"):
         estados.pop(chat_id, None)
         send(chat_id, "Cancelado.")
@@ -101,6 +105,7 @@ def procesar_mensaje(chat_id, text):
         send(chat_id,
             "Comandos:\n"
             "/partido  - analizar un partido manualmente\n"
+            "/proximos - ver los proximos partidos del Mundial\n"
             "/cancelar - cancelar operacion\n"
             "/ayuda    - este mensaje\n\n"
             "El bot te avisa automaticamente 30 min antes de cada partido del Mundial."
@@ -172,6 +177,48 @@ def get_proximos_partidos():
     except Exception as e:
         print(f"[ERROR partidos] {e}")
         return []
+
+def get_todos_proximos_partidos():
+    try:
+        r = requests.get(
+            "https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/events",
+            params={"apiKey": ODDS_API_KEY},
+            timeout=10
+        )
+        if r.status_code != 200:
+            print(f"[ERROR todos_proximos] status {r.status_code}")
+            return []
+        ahora = datetime.now(ART)
+        partidos = []
+        for m in r.json():
+            commence = datetime.fromisoformat(m["commence_time"].replace("Z", "+00:00")).astimezone(ART)
+            if commence > ahora:
+                partidos.append({"equipo1": m["home_team"], "equipo2": m["away_team"], "commence": commence})
+        partidos.sort(key=lambda p: p["commence"])
+        return partidos
+    except Exception as e:
+        print(f"[ERROR todos_proximos] {e}")
+        return []
+
+def cmd_proximos(chat_id):
+    partidos = get_todos_proximos_partidos()
+    if not partidos:
+        send(chat_id, "No hay proximos partidos del Mundial disponibles por el momento.")
+        return
+
+    DIAS_ES = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
+    lineas = ["Proximos partidos del Mundial 2026:", ""]
+    fecha_actual = None
+    for p in partidos:
+        fecha = p["commence"].date()
+        if fecha != fecha_actual:
+            fecha_actual = fecha
+            dia = DIAS_ES[p["commence"].weekday()]
+            lineas.append(f"-- {dia} {fecha.strftime('%d/%m')} --")
+        hora = p["commence"].strftime("%H:%M")
+        lineas.append(f"  {hora}  {p['equipo1']} vs {p['equipo2']}")
+
+    send(chat_id, "\n".join(lineas))
 
 def monitor_partidos():
     notificados = set()
