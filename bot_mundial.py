@@ -87,11 +87,12 @@ def get_updates(offset=None):
     try:
         r = requests.get(
             f"https://api.telegram.org/bot{TG_BOT_TOKEN}/getUpdates",
-            params={"timeout": 20, "offset": offset},
-            timeout=25
+            params={"timeout": 5, "offset": offset},
+            timeout=10
         )
         return r.json().get("result", [])
-    except:
+    except Exception as e:
+        print(f"[ERROR getUpdates] {e}")
         return []
 
 # ==================== FLUJO CONVERSACIONAL ====================
