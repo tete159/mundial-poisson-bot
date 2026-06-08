@@ -159,11 +159,18 @@ def procesar_mensaje(chat_id, text):
         send(chat_id, texto_historial())
         return
 
+    if text == "/limpiar":
+        estados[chat_id] = {"step": "confirmar_limpiar"}
+        send(chat_id, "Esto borra TODO el historial (predicciones y resultados).\n"
+                      "Escribi SI para confirmar, o /cancelar.")
+        return
+
     if text in ("/ayuda", "/help", "/start"):
         send(chat_id,
             "Comandos:\n"
             "/partido   - analizar un partido manualmente\n"
             "/historial - ver mis aciertos hasta ahora\n"
+            "/limpiar   - borrar todo el historial\n"
             "/cancelar  - cancelar operacion\n"
             "/ayuda     - este mensaje\n\n"
             "El bot te avisa 30 min antes de cada partido del Mundial,\n"
@@ -175,6 +182,16 @@ def procesar_mensaje(chat_id, text):
 
     if not estado:
         send(chat_id, "Escribi /partido para analizar un partido.")
+        return
+
+    # ---- confirmacion de /limpiar ----
+    if estado.get("step") == "confirmar_limpiar":
+        estados.pop(chat_id, None)
+        if text.strip().lower() in ("si", "sí", "yes"):
+            n = historial.limpiar()
+            send(chat_id, f"Listo. Borre {n} registros. El historial arranca de cero.")
+        else:
+            send(chat_id, "Cancelado, no borre nada.")
         return
 
     # ---- esperando que el usuario cargue el resultado real de un partido ----

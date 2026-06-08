@@ -156,6 +156,15 @@ def ultimos(n=10):
     return con_res[-n:]
 
 
+def limpiar():
+    """Borra todo el historial. Devuelve cuantos registros habia."""
+    with _lock:
+        data = _load()
+        n = len(data["predicciones"])
+        _save({"predicciones": []})
+    return n
+
+
 def prior_extra():
     """
     Devuelve (extra_nodraw, extra_draw): frecuencias de marcador de los
