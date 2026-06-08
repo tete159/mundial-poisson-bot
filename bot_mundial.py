@@ -292,6 +292,11 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8")
     print("Bot Mundial 2026 iniciado")
     print("Escuchando en @billboardtopbot...")
+    if historial._DATA_DIR == "/data":
+        print("[OK] Volumen persistente activo (/data) - el historial NO se borra")
+    else:
+        print("[AVISO] SIN volumen persistente - el historial se borrara en cada deploy")
+        print(f"        guardando en: {historial._DATA_DIR}")
 
     threading.Thread(target=monitor_partidos, daemon=True).start()
 
