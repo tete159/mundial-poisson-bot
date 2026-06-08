@@ -90,39 +90,62 @@ def matriz_poisson_dc(xg1, xg2):
 
 # ==================== COMPONENTE 2: PRIOR HISTORICO ====================
 
-def matriz_historica(p1, px, p2):
+PESO_RESULTADO_REAL = 5   # cada resultado real del Mundial pesa como N historicos
+
+
+def matriz_historica(p1, px, p2, extra_nodraw=None, extra_draw=None):
     """
     Construye matriz de marcador desde el prior historico del Mundial,
     orientada segun quien es favorito (p1 = prob local gana, p2 = visitante).
+
+    extra_nodraw / extra_draw: frecuencias de resultados REALES ya jugados
+    (forma ordenada ganador-perdedor). Se suman al prior con mas peso, para
+    que el modelo aprenda de lo que paso en este Mundial.
     """
+    # combinar prior base + resultados reales (ponderados)
+    nodraw = dict(HIST_NODRAW)
+    draw = dict(HIST_DRAW)
+    if extra_nodraw:
+        for k, v in extra_nodraw.items():
+            nodraw[k] = nodraw.get(k, 0) + v * PESO_RESULTADO_REAL
+    if extra_draw:
+        for k, v in extra_draw.items():
+            draw[k] = draw.get(k, 0) + v * PESO_RESULTADO_REAL
+
+    tot_nodraw = sum(nodraw.values())
+    tot_draw = sum(draw.values())
+
     M = {}
     for i in range(MAX_GOALS + 1):
         for j in range(MAX_GOALS + 1):
             M[(i, j)] = 0.0
 
     # No-empates: el prior (a-b, a>b) se reparte entre "gana local" y "gana visitante"
-    for (a, b), f in HIST_NODRAW.items():
+    for (a, b), f in nodraw.items():
         if a > MAX_GOALS or b > MAX_GOALS:
             continue
-        cond = f / _TOT_NODRAW            # P(marcador a-b | hubo ganador)
+        cond = f / tot_nodraw            # P(marcador a-b | hubo ganador)
         M[(a, b)] += p1 * cond           # local gana a-b
         M[(b, a)] += p2 * cond           # visitante gana a-b
 
     # Empates
-    for (a, a2), f in HIST_DRAW.items():
+    for (a, _a2), f in draw.items():
         if a > MAX_GOALS:
             continue
-        M[(a, a)] += px * (f / _TOT_DRAW)
+        M[(a, a)] += px * (f / tot_draw)
 
     return M
 
 
 # ==================== BLEND FINAL ====================
 
-def predecir(o1, ox, o2, over_odds, w_hist=W_HIST):
+def predecir(o1, ox, o2, over_odds, w_hist=W_HIST, extra_nodraw=None, extra_draw=None):
     """
     Devuelve lista [(marcador, prob_%)] ordenada de mayor a menor,
     combinando Poisson+DixonColes con el prior historico del Mundial.
+
+    extra_nodraw / extra_draw: resultados reales ya jugados (del historial),
+    que se suman al prior para que el modelo aprenda sobre la marcha.
     """
     p1, px, p2 = _no_vig(o1, ox, o2)
 
@@ -130,7 +153,7 @@ def predecir(o1, ox, o2, over_odds, w_hist=W_HIST):
     xg1, xg2 = team_xgs(total_xg, o1, o2)
 
     M_dc   = matriz_poisson_dc(xg1, xg2)
-    M_hist = matriz_historica(p1, px, p2)
+    M_hist = matriz_historica(p1, px, p2, extra_nodraw, extra_draw)
 
     final = {}
     for k in M_dc:

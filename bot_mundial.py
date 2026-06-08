@@ -3,6 +3,7 @@ import os, sys, time, threading, requests
 from datetime import datetime
 from pytz import timezone
 from modelo import predecir   # Poisson + Dixon-Coles + prior historico del Mundial
+import historial              # guarda predicciones/resultados y retroalimenta el modelo
 
 TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN", "")
 TG_CHAT_ID   = int(os.getenv("TG_CHAT_ID", "0"))
@@ -27,12 +28,23 @@ def build_resultado(estado):
     o1, ox, o2 = estado["o1"], estado["ox"], estado["o2"]
     over, under = estado["over"], estado["under"]
 
-    ranking, (xg1, xg2, total_xg) = predecir(o1, ox, o2, over)
+    # resultados reales ya jugados -> alimentan el prior del modelo
+    extra_nd, extra_d = historial.prior_extra()
+    ranking, (xg1, xg2, total_xg) = predecir(
+        o1, ox, o2, over, extra_nodraw=extra_nd, extra_draw=extra_d
+    )
     picks = ranking[:5]
+
+    # registrar la prediccion (para luego preguntar el resultado)
+    fecha = estado.get("fecha_partido")
+    historial.registrar_prediccion(team1, team2, ranking, fecha_partido=fecha)
+
+    aprendidos = sum(extra_nd.values()) + sum(extra_d.values())
+    nota_aprendizaje = f"  (ajustado con {aprendidos} resultados reales)" if aprendidos else ""
 
     lineas = [
         "MUNDIAL 2026 - Prediccion de marcador",
-        "(Poisson + Dixon-Coles + historico Mundial)",
+        "(Poisson + Dixon-Coles + historico Mundial)" + nota_aprendizaje,
         "",
         f"{team1} vs {team2}",
         "",
@@ -53,6 +65,18 @@ def build_resultado(estado):
 
     lineas += ["", f"ELEGIR: {picks[0][0]}", f"CONTRARIAN: {picks[2][0]}"]
     return "\n".join(lineas)
+
+
+def parse_marcador(text):
+    """Acepta '2-1', '2:1', '2 1' -> (2, 1). Devuelve None si no se entiende."""
+    t = text.replace(":", "-").replace(",", "-").replace(" ", "-")
+    partes = [x for x in t.split("-") if x != ""]
+    if len(partes) != 2:
+        return None
+    try:
+        return int(partes[0]), int(partes[1])
+    except ValueError:
+        return None
 
 # ==================== TELEGRAM ====================
 
@@ -80,9 +104,43 @@ def get_updates(offset=None):
 
 # ==================== FLUJO CONVERSACIONAL ====================
 
-def iniciar_partido(chat_id, equipo1, equipo2):
-    estados[chat_id] = {"step": 0, "equipo1": equipo1, "equipo2": equipo2}
+def iniciar_partido(chat_id, equipo1, equipo2, fecha_partido=None):
+    estados[chat_id] = {"step": 0, "equipo1": equipo1, "equipo2": equipo2,
+                        "fecha_partido": fecha_partido}
     send(chat_id, f"Partido: {equipo1} vs {equipo2}\n\nCuota victoria {equipo1} (1)?")
+
+
+def preguntar_resultado(chat_id, pred):
+    """Le pregunta al usuario como salio un partido ya jugado."""
+    estados[chat_id] = {
+        "step": "esperar_resultado",
+        "pred_id": pred["id"],
+        "equipo1": pred["equipo1"],
+        "equipo2": pred["equipo2"],
+    }
+    historial.marcar_preguntado(pred["id"])
+    send(chat_id,
+         f"Como salio {pred['equipo1']} vs {pred['equipo2']}?\n"
+         f"Respondeme el marcador (ej: 2-1)")
+
+
+def texto_historial():
+    s = historial.stats()
+    if s["total"] == 0:
+        return "Todavia no hay resultados cargados.\nCuando se jueguen partidos te voy a preguntar como salieron."
+    lineas = [
+        "HISTORIAL DE ACIERTOS",
+        "",
+        f"Partidos con resultado: {s['total']}",
+        f"Acerto el marcador exacto (top1): {s['top1']}/{s['total']}  ({s['pct_top1']:.0f}%)",
+        f"El real estaba en mi top3:        {s['top3']}/{s['total']}  ({s['pct_top3']:.0f}%)",
+        "",
+        "Ultimos partidos:",
+    ]
+    for p in historial.ultimos(8):
+        ok = "OK " if p["resultado"] == p["top1"] else ("~  " if p["resultado"] in p["top3"] else "X  ")
+        lineas.append(f"  {ok}{p['equipo1']} vs {p['equipo2']}: real {p['resultado']} (predije {p['top1']})")
+    return "\n".join(lineas)
 
 def procesar_mensaje(chat_id, text):
     text = text.strip()
@@ -97,13 +155,19 @@ def procesar_mensaje(chat_id, text):
         send(chat_id, "Cancelado.")
         return
 
+    if text in ("/historial", "/stats"):
+        send(chat_id, texto_historial())
+        return
+
     if text in ("/ayuda", "/help", "/start"):
         send(chat_id,
             "Comandos:\n"
-            "/partido  - analizar un partido manualmente\n"
-            "/cancelar - cancelar operacion\n"
-            "/ayuda    - este mensaje\n\n"
-            "El bot te avisa automaticamente 30 min antes de cada partido del Mundial."
+            "/partido   - analizar un partido manualmente\n"
+            "/historial - ver mis aciertos hasta ahora\n"
+            "/cancelar  - cancelar operacion\n"
+            "/ayuda     - este mensaje\n\n"
+            "El bot te avisa 30 min antes de cada partido del Mundial,\n"
+            "y despues te pregunta como salio para ir aprendiendo."
         )
         return
 
@@ -111,6 +175,29 @@ def procesar_mensaje(chat_id, text):
 
     if not estado:
         send(chat_id, "Escribi /partido para analizar un partido.")
+        return
+
+    # ---- esperando que el usuario cargue el resultado real de un partido ----
+    if estado.get("step") == "esperar_resultado":
+        marcador = parse_marcador(text)
+        if not marcador:
+            send(chat_id, "No entendi el marcador. Mandalo asi: 2-1")
+            return
+        g1, g2 = marcador
+        pred = historial.registrar_resultado(estado["pred_id"], g1, g2)
+        estados.pop(chat_id, None)
+        if pred:
+            acierto = (pred["resultado"] == pred["top1"])
+            en_top3 = (pred["resultado"] in pred["top3"])
+            if acierto:
+                msg = f"Excelente! Habia predicho {pred['top1']} y salio {pred['resultado']}. Acierto!"
+            elif en_top3:
+                msg = f"Cerca: salio {pred['resultado']}, lo tenia en mi top3 (predije {pred['top1']})."
+            else:
+                msg = f"Esta vez no: salio {pred['resultado']}, yo predije {pred['top1']}."
+            send(chat_id, msg + "\nGuardado. Esto mejora las proximas predicciones.")
+        else:
+            send(chat_id, "No encontre ese partido, pero gracias igual.")
         return
 
     if estado.get("step") == "esperar_equipo1":
@@ -177,6 +264,7 @@ def monitor_partidos():
     notificados = set()
     while True:
         try:
+            # 1) avisar 30 min antes de cada partido y pedir cuotas
             for p in get_proximos_partidos():
                 key = f"{p['equipo1']}_{p['equipo2']}_{p['commence'].date()}"
                 if key not in notificados:
@@ -185,7 +273,15 @@ def monitor_partidos():
                     print(f"[AUTO] Partido en 30 min: {p['equipo1']} vs {p['equipo2']}")
                     send(TG_CHAT_ID, f"Partido en 30 min! ({hora} hs)\nVoy a pedirte las cuotas de Bet365:")
                     time.sleep(2)
-                    iniciar_partido(TG_CHAT_ID, p["equipo1"], p["equipo2"])
+                    iniciar_partido(TG_CHAT_ID, p["equipo1"], p["equipo2"],
+                                    fecha_partido=p["commence"])
+
+            # 2) preguntar el resultado de partidos ya jugados (si el chat esta libre)
+            if TG_CHAT_ID not in estados:
+                pendientes = historial.pendientes_para_preguntar()
+                if pendientes:
+                    print(f"[AUTO] Preguntando resultado: {pendientes[0]['equipo1']} vs {pendientes[0]['equipo2']}")
+                    preguntar_resultado(TG_CHAT_ID, pendientes[0])
         except Exception as e:
             print(f"[ERROR monitor] {e}")
         time.sleep(60)

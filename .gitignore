@@ -1,2 +1,5 @@
-﻿__pycache__/
+__pycache__/
 *.pyc
+historial.json
+historial_TEST.json
+test_out.txt
