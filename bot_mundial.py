@@ -155,6 +155,10 @@ def procesar_mensaje(chat_id, text):
         send(chat_id, "Cancelado.")
         return
 
+    if text in ("/proximos", "/calendario"):
+        send(chat_id, texto_calendario())
+        return
+
     if text in ("/historial", "/stats"):
         send(chat_id, texto_historial())
         return
@@ -169,6 +173,7 @@ def procesar_mensaje(chat_id, text):
         send(chat_id,
             "Comandos:\n"
             "/partido   - analizar un partido manualmente\n"
+            "/proximos  - ver el calendario de partidos\n"
             "/historial - ver mis aciertos hasta ahora\n"
             "/limpiar   - borrar todo el historial\n"
             "/cancelar  - cancelar operacion\n"
@@ -276,6 +281,41 @@ def get_proximos_partidos():
     except Exception as e:
         print(f"[ERROR partidos] {e}")
         return []
+
+def get_calendario(n=12):
+    """Devuelve los proximos n partidos del Mundial (los que aun no empezaron)."""
+    try:
+        r = requests.get(
+            "https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/events",
+            params={"apiKey": ODDS_API_KEY, "regions": "ar", "oddsFormat": "decimal"},
+            timeout=10
+        )
+        if r.status_code != 200:
+            return []
+        ahora = datetime.now(ART)
+        partidos = []
+        for m in r.json():
+            commence = datetime.fromisoformat(m["commence_time"].replace("Z", "+00:00")).astimezone(ART)
+            if commence > ahora:
+                partidos.append({"equipo1": m["home_team"], "equipo2": m["away_team"], "commence": commence})
+        partidos.sort(key=lambda p: p["commence"])
+        return partidos[:n]
+    except Exception as e:
+        print(f"[ERROR calendario] {e}")
+        return []
+
+
+def texto_calendario():
+    partidos = get_calendario()
+    if not partidos:
+        return "No pude traer el calendario ahora. Proba de nuevo en un rato."
+    lineas = ["PROXIMOS PARTIDOS", ""]
+    for p in partidos:
+        cuando = p["commence"].strftime("%d/%m %H:%M")
+        lineas.append(f"  {cuando}  {p['equipo1']} vs {p['equipo2']}")
+    lineas += ["", "(horarios de Argentina)"]
+    return "\n".join(lineas)
+
 
 def monitor_partidos():
     notificados = set()
