@@ -345,12 +345,7 @@ def monitor_partidos():
                     iniciar_partido(TG_CHAT_ID, p["equipo1"], p["equipo2"],
                                     fecha_partido=p["commence"])
 
-            # 2) preguntar el resultado de partidos ya jugados (si el chat esta libre)
-            if TG_CHAT_ID not in estados:
-                pendientes = historial.pendientes_para_preguntar()
-                if pendientes:
-                    print(f"[AUTO] Preguntando resultado: {pendientes[0]['equipo1']} vs {pendientes[0]['equipo2']}")
-                    preguntar_resultado(TG_CHAT_ID, pendientes[0])
+            # resultados se cargan por la planilla de Google Sheets (no por Telegram)
         except Exception as e:
             print(f"[ERROR monitor] {e}")
         time.sleep(60)
