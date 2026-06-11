@@ -144,7 +144,7 @@ def preguntar_resultado(chat_id, pred):
 def texto_historial():
     s = historial.stats()
     if s["total"] == 0:
-        return "Todavia no hay resultados cargados.\nCuando se jueguen partidos te voy a preguntar como salieron."
+        return "Todavia no hay resultados cargados.\nCarga los resultados en la planilla de Google Sheets cuando terminen los partidos."
     lineas = [
         "HISTORIAL DE ACIERTOS",
         "",
