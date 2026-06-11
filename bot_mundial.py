@@ -163,8 +163,18 @@ def procesar_mensaje(chat_id, text):
     text = text.strip()
 
     if text == "/partido":
-        estados[chat_id] = {"step": "esperar_equipo1"}
-        send(chat_id, "Nombre del equipo local?")
+        proximos = get_calendario(5)
+        if proximos:
+            estados[chat_id] = {"step": "elegir_partido", "opciones": proximos}
+            lineas = ["Que partido queres analizar?\n"]
+            for i, p in enumerate(proximos, 1):
+                cuando = p["commence"].strftime("%d/%m %H:%M")
+                lineas.append(f"{i}. {p['equipo1']} vs {p['equipo2']}  ({cuando})")
+            lineas.append("\nEscribi el numero o /cancelar")
+            send(chat_id, "\n".join(lineas))
+        else:
+            estados[chat_id] = {"step": "esperar_equipo1"}
+            send(chat_id, "Nombre del equipo local?")
         return
 
     if text in ("/cancelar", "/cancel"):
@@ -237,6 +247,19 @@ def procesar_mensaje(chat_id, text):
             send(chat_id, msg + "\nGuardado. Esto mejora las proximas predicciones.")
         else:
             send(chat_id, "No encontre ese partido, pero gracias igual.")
+        return
+
+    if estado.get("step") == "elegir_partido":
+        opciones = estado["opciones"]
+        try:
+            idx = int(text.strip()) - 1
+            if not (0 <= idx < len(opciones)):
+                raise ValueError
+        except ValueError:
+            send(chat_id, f"Escribi un numero del 1 al {len(opciones)}.")
+            return
+        p = opciones[idx]
+        iniciar_partido(chat_id, p["equipo1"], p["equipo2"], fecha_partido=p["commence"])
         return
 
     if estado.get("step") == "esperar_equipo1":
