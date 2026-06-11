@@ -51,6 +51,11 @@ def build_resultado(estado):
     fecha = estado.get("fecha_partido")
     historial.registrar_prediccion(team1, team2, ranking, fecha_partido=fecha)
 
+    # guardar top-1 en la planilla (columnas Pred 1 / Pred 2)
+    top_score = picks[0][0]  # ej: "1-0"
+    pg1, pg2 = map(int, top_score.split("-"))
+    sheets_mundial.registrar_prediccion(team1, team2, pg1, pg2)
+
     aprendidos = sum(extra_nd.values()) + sum(extra_d.values())
     nota_aprendizaje = f"  (ajustado con {aprendidos} resultados reales)" if aprendidos else ""
 

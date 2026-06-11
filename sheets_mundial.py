@@ -89,6 +89,26 @@ def prior_extra():
     return extra_nodraw, extra_draw
 
 
+def registrar_prediccion(equipo1, equipo2, pred_g1, pred_g2):
+    """Escribe la prediccion top-1 en las columnas Pred 1 / Pred 2 del partido."""
+    ws = _abrir()
+    if ws is None:
+        return
+    try:
+        registros = ws.get_all_records()
+        for i, r in enumerate(registros, start=2):  # fila 2 en adelante
+            e1 = str(r.get("Equipo 1", "")).strip().lower()
+            e2 = str(r.get("Equipo 2", "")).strip().lower()
+            if e1 == equipo1.strip().lower() and e2 == equipo2.strip().lower():
+                ws.update(values=[[pred_g1, pred_g2]], range_name=f"F{i}:G{i}")
+                print(f"[Sheets] Prediccion {pred_g1}-{pred_g2} guardada para {equipo1} vs {equipo2}")
+                _cache["rows"] = None  # invalidar cache
+                return
+        print(f"[Sheets] No encontre la fila de {equipo1} vs {equipo2}")
+    except Exception as e:
+        print(f"[ERROR sheets pred] {e}")
+
+
 def disponible():
     """True si las credenciales y la planilla estan configuradas."""
     return bool(os.getenv("GCP_SA_JSON") and GSHEET_ID)
