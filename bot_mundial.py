@@ -3,7 +3,19 @@ import os, sys, time, threading, requests
 from datetime import datetime
 from pytz import timezone
 from modelo import predecir   # Poisson + Dixon-Coles + prior historico del Mundial
-import historial              # guarda predicciones/resultados y retroalimenta el modelo
+import historial              # guarda las predicciones (volumen Railway)
+import sheets_mundial         # lee resultados que el usuario carga a mano en Google Sheets
+
+
+def _prior_combinado():
+    """Junta los resultados de la planilla de Google + los cargados por el bot."""
+    nd, d = sheets_mundial.prior_extra()           # fuente principal: la planilla
+    nd2, d2 = historial.prior_extra()              # por si se cargo algo por Telegram
+    for k, v in nd2.items():
+        nd[k] = nd.get(k, 0) + v
+    for k, v in d2.items():
+        d[k] = d.get(k, 0) + v
+    return nd, d
 
 TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN", "")
 TG_CHAT_ID   = int(os.getenv("TG_CHAT_ID", "0"))
@@ -29,7 +41,7 @@ def build_resultado(estado):
     over, under = estado["over"], estado["under"]
 
     # resultados reales ya jugados -> alimentan el prior del modelo
-    extra_nd, extra_d = historial.prior_extra()
+    extra_nd, extra_d = _prior_combinado()
     ranking, (xg1, xg2, total_xg) = predecir(
         o1, ox, o2, over, extra_nodraw=extra_nd, extra_draw=extra_d
     )
