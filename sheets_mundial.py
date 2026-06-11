@@ -89,6 +89,38 @@ def prior_extra():
     return extra_nodraw, extra_draw
 
 
+def leer_resultados_con_pred():
+    """Devuelve partidos que tienen resultado real Y prediccion cargada."""
+    ws = _abrir()
+    if ws is None:
+        return []
+    try:
+        registros = ws.get_all_records()
+    except Exception as e:
+        print(f"[ERROR sheets read] {e}")
+        return []
+
+    out = []
+    for r in registros:
+        g1  = str(r.get("Goles 1", "")).strip()
+        g2  = str(r.get("Goles 2", "")).strip()
+        p1  = str(r.get("Pred 1", "")).strip()
+        p2  = str(r.get("Pred 2", "")).strip()
+        if not all([g1, g2, p1, p2]):
+            continue
+        try:
+            out.append({
+                "fecha":   str(r.get("Fecha", "")),
+                "equipo1": str(r.get("Equipo 1", "")).strip(),
+                "equipo2": str(r.get("Equipo 2", "")).strip(),
+                "g1": int(g1), "g2": int(g2),
+                "pred_g1": int(float(p1)), "pred_g2": int(float(p2)),
+            })
+        except ValueError:
+            continue
+    return out
+
+
 def registrar_prediccion(equipo1, equipo2, pred_g1, pred_g2):
     """Escribe la prediccion top-1 en las columnas Pred 1 / Pred 2 del partido."""
     ws = _abrir()

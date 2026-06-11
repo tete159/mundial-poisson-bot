@@ -142,21 +142,39 @@ def preguntar_resultado(chat_id, pred):
 
 
 def texto_historial():
-    s = historial.stats()
-    if s["total"] == 0:
+    # Leer resultados de la planilla (Goles 1/2 + Pred 1/2)
+    resultados = sheets_mundial.leer_resultados_con_pred()
+    if not resultados:
         return "Todavia no hay resultados cargados.\nCarga los resultados en la planilla de Google Sheets cuando terminen los partidos."
+
+    exactos = sum(1 for r in resultados if r["pred_g1"] == r["g1"] and r["pred_g2"] == r["g2"])
+    result_ok = 0
+    for r in resultados:
+        res_real = 1 if r["g1"] > r["g2"] else (2 if r["g1"] < r["g2"] else 0)
+        res_pred = 1 if r["pred_g1"] > r["pred_g2"] else (2 if r["pred_g1"] < r["pred_g2"] else 0)
+        if res_real == res_pred:
+            result_ok += 1
+
+    total = len(resultados)
     lineas = [
         "HISTORIAL DE ACIERTOS",
         "",
-        f"Partidos con resultado: {s['total']}",
-        f"Acerto el marcador exacto (top1): {s['top1']}/{s['total']}  ({s['pct_top1']:.0f}%)",
-        f"El real estaba en mi top3:        {s['top3']}/{s['total']}  ({s['pct_top3']:.0f}%)",
+        f"Partidos jugados:      {total}",
+        f"Marcador exacto (12p): {exactos}/{total}  ({exactos/total*100:.0f}%)",
+        f"Resultado correcto:    {result_ok}/{total}  ({result_ok/total*100:.0f}%)",
         "",
         "Ultimos partidos:",
     ]
-    for p in historial.ultimos(8):
-        ok = "OK " if p["resultado"] == p["top1"] else ("~  " if p["resultado"] in p["top3"] else "X  ")
-        lineas.append(f"  {ok}{p['equipo1']} vs {p['equipo2']}: real {p['resultado']} (predije {p['top1']})")
+    for r in resultados[-8:]:
+        pred = f"{r['pred_g1']}-{r['pred_g2']}"
+        real = f"{r['g1']}-{r['g2']}"
+        if pred == real:
+            marca = "OK"
+        else:
+            res_real = 1 if r["g1"] > r["g2"] else (2 if r["g1"] < r["g2"] else 0)
+            res_pred = 1 if r["pred_g1"] > r["pred_g2"] else (2 if r["pred_g1"] < r["pred_g2"] else 0)
+            marca = "~" if res_real == res_pred else "X"
+        lineas.append(f"  {marca}  {r['equipo1']} vs {r['equipo2']}: real {real}  predije {pred}")
     return "\n".join(lineas)
 
 def procesar_mensaje(chat_id, text):
