@@ -107,11 +107,10 @@ def build_resultado(estado):
     for score, ev in ev_ranking[:3]:
         lineas.append(f"   {score}: {ev} pts/partido")
 
-    lineas += [
-        "",
-        f"MAX PUNTOS  : {mejor_ev[0]}  ({mejor_ev[1]} pts esperados)",
-        f"AGRESIVO    : {picks[2][0]}",
-    ]
+    # las opciones de juego se muestran al final, con nombres de equipos
+    def con_equipos(score):
+        g1, g2 = score.split("-")
+        return f"{team1} {g1} - {team2} {g2}"
 
     n_reales = len(resultados_reales)
     if n_reales:
@@ -124,7 +123,7 @@ def build_resultado(estado):
                    "en 90/120 min cuentan distinto y los equipos especulan mas.",
                    "Recorda que tenemos pendiente ajustar el prior por fase."]
 
-    return "\n".join(lineas), mejor_ev[0], picks[2][0]
+    return "\n".join(lineas), mejor_ev[0], picks[2][0], con_equipos
 
 
 def parse_marcador(text):
@@ -324,37 +323,35 @@ def procesar_mensaje(chat_id, text):
         pts_mios    = estado["pts_mios"]
         pts_lider   = pts_lider
         deficit     = pts_lider - pts_mios
-        conservador = estado["conservador"]
-        agresivo    = estado["agresivo"]
-        jugados     = len(sheets_mundial.leer_resultados())
-        restantes   = max(104 - jugados, 1)
+        conservador  = estado["conservador"]
+        agresivo     = estado["agresivo"]
+        con_equipos  = estado["con_equipos"]
+        jugados      = len(sheets_mundial.leer_resultados())
+        restantes    = max(104 - jugados, 1)
 
         if deficit <= 0:
-            # voy primero
-            rec = conservador
+            rec   = conservador
             razon = "Vas primero, protege el liderazgo."
         elif restantes == 0:
-            rec = agresivo
+            rec   = agresivo
             razon = "No quedan partidos, el torneo ya termino."
         else:
             deficit_por_partido = deficit / restantes
-            # con top-1 el promedio esperado es ~7 pts/partido
-            # si el deficit por partido supera ~5, hay que arriesgar
             if deficit_por_partido > 5:
-                rec = agresivo
+                rec   = agresivo
                 razon = f"Vas {deficit}p abajo con {restantes} partidos: necesitas arriesgar."
             elif deficit_por_partido > 2:
-                rec = agresivo
+                rec   = agresivo
                 razon = f"Vas {deficit}p abajo con {restantes} partidos: conviene ser agresivo."
             else:
-                rec = conservador
+                rec   = conservador
                 razon = f"Vas {deficit}p abajo con {restantes} partidos: podes recuperar jugando seguro."
 
         send(chat_id,
              f"ESTRATEGIA RECOMENDADA\n\n"
              f"Vos: {pts_mios}p  |  Lider: {pts_lider}p  |  Restantes: {restantes}\n\n"
              f"{razon}\n\n"
-             f">>> JUGÁ: {rec}")
+             f">>> JUGA: {con_equipos(rec)}")
         return
 
     if estado.get("step") == "elegir_partido":
@@ -402,9 +399,8 @@ def procesar_mensaje(chat_id, text):
         pregunta = PASOS[step][1].format(equipo1=estado["equipo1"], equipo2=estado["equipo2"])
         send(chat_id, pregunta)
     else:
-        texto, conservador, agresivo = build_resultado(estado)
+        texto, conservador, agresivo, con_equipos = build_resultado(estado)
         send(chat_id, texto)
-        # guardar opciones y pedir puntos para recomendar estrategia
         # calcular mis puntos desde la planilla
         def _calc_pts(r):
             p1, p2, g1, g2 = r["pred_g1"], r["pred_g2"], r["g1"], r["g2"]
@@ -421,6 +417,7 @@ def procesar_mensaje(chat_id, text):
             "step": "esperar_pts_lider",
             "conservador": conservador,
             "agresivo": agresivo,
+            "con_equipos": con_equipos,
             "pts_mios": pts_mios,
         }
         send(chat_id, f"Tus puntos (de la planilla): {pts_mios}\nCuantos tiene el primero?")
