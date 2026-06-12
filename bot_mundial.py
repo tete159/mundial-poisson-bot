@@ -30,8 +30,8 @@ PASOS = [
     ("o2",    "Cuota victoria {equipo2} (2)?"),
     ("over",  "Cuota Over 2.5 goles?"),
     ("under", "Cuota Under 2.5 goles?"),
-    ("btts_si", "Cuota 'Ambos equipos anotan - Si'? (si no tenes, manda 0)"),
-    ("btts_no", "Cuota 'Ambos equipos anotan - No'? (si no tenes, manda 0)"),
+    ("btts_si", "Cuota 'Ambos equipos anotan - Si'?"),
+    ("btts_no", "Cuota 'Ambos equipos anotan - No'?"),
 ]
 
 # ==================== ANALISIS ====================
@@ -71,6 +71,10 @@ def build_resultado(estado):
     aprendidos = sum(extra_nd.values()) + sum(extra_d.values())
     nota_aprendizaje = f"  (ajustado con {aprendidos} resultados reales)" if aprendidos else ""
 
+    # partidos reales ya jugados que alimentan el modelo
+    resultados_reales = sheets_mundial.leer_resultados()
+
+
     lineas = [
         "MUNDIAL 2026 - Prediccion de marcador",
         "(Poisson + Dixon-Coles + historico Mundial)" + nota_aprendizaje,
@@ -93,6 +97,14 @@ def build_resultado(estado):
         lineas.append(f"{marca} {i}. {score}   ({prob}%)")
 
     lineas += ["", f"ELEGIR: {picks[0][0]}", f"CONTRARIAN: {picks[2][0]}"]
+
+    if resultados_reales:
+        lineas += ["", "Resultados de este Mundial que tome en cuenta:"]
+        for r in resultados_reales:
+            lineas.append(f"  {r['equipo1']} {r['g1']}-{r['g2']} {r['equipo2']}")
+    else:
+        lineas += ["", "(Sin resultados de este Mundial aun - usando solo historico)"]
+
     return "\n".join(lineas)
 
 
