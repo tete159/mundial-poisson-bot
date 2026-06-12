@@ -312,21 +312,6 @@ def procesar_mensaje(chat_id, text):
             send(chat_id, "No encontre ese partido, pero gracias igual.")
         return
 
-    if estado.get("step") == "esperar_pts_mios":
-        try:
-            pts_mios = int(float(text.strip()))
-        except ValueError:
-            send(chat_id, "Manda solo un numero.")
-            return
-        if pts_mios == 0:
-            estados.pop(chat_id, None)
-            send(chat_id, f"OK. Jugate el CONSERVADOR: {estado['conservador']}")
-            return
-        estado["pts_mios"] = pts_mios
-        estado["step"] = "esperar_pts_lider"
-        send(chat_id, "Cuantos puntos tiene el primero?")
-        return
-
     if estado.get("step") == "esperar_pts_lider":
         try:
             pts_lider = int(float(text.strip()))
@@ -419,12 +404,25 @@ def procesar_mensaje(chat_id, text):
         texto, conservador, agresivo = build_resultado(estado)
         send(chat_id, texto)
         # guardar opciones y pedir puntos para recomendar estrategia
+        # calcular mis puntos desde la planilla
+        def _calc_pts(r):
+            p1, p2, g1, g2 = r["pred_g1"], r["pred_g2"], r["g1"], r["g2"]
+            if p1 == g1 and p2 == g2: return 12
+            res_pred = 1 if p1>p2 else (2 if p1<p2 else 0)
+            res_real = 1 if g1>g2 else (2 if g1<g2 else 0)
+            pts = 5 if res_pred == res_real else 0
+            if (p1==g1) != (p2==g2): pts += 2
+            return pts
+        resultados_con_pred = sheets_mundial.leer_resultados_con_pred()
+        pts_mios = sum(_calc_pts(r) for r in resultados_con_pred)
+
         estados[chat_id] = {
-            "step": "esperar_pts_mios",
+            "step": "esperar_pts_lider",
             "conservador": conservador,
             "agresivo": agresivo,
+            "pts_mios": pts_mios,
         }
-        send(chat_id, "Cuantos puntos tenes vos en la quiniela?\n(manda 0 si no sabés o no querés estrategia)")
+        send(chat_id, f"Tus puntos (de la planilla): {pts_mios}\nCuantos tiene el primero?")
         print(f"[OK] Analisis enviado: {estado['equipo1']} vs {estado['equipo2']}")
 
 # ==================== MONITOR AUTOMATICO ====================
