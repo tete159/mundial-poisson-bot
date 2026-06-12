@@ -197,6 +197,48 @@ def predecir(o1, ox, o2, over_odds, btts_si_odds=None, w_hist=W_HIST, extra_nodr
     return [(f"{i}-{j}", round(p * 100, 1)) for (i, j), p in ranking], (xg1, xg2, total_xg)
 
 
+# ==================== MAXIMIZAR PUNTOS DE QUINIELA ====================
+# Sistema: exacto=12 | resultado+goles de 1 equipo=7 | solo resultado=5
+#          | solo goles de 1 equipo=2 | nada=0
+
+def _pts_quiniela(pred, real):
+    """Puntos que da la quiniela si pronosticas `pred` y sale `real`."""
+    p1, p2 = pred
+    g1, g2 = real
+    if p1 == g1 and p2 == g2:
+        return 12
+    res_pred = 1 if p1 > p2 else (2 if p1 < p2 else 0)
+    res_real = 1 if g1 > g2 else (2 if g1 < g2 else 0)
+    pts = 5 if res_pred == res_real else 0
+    if (p1 == g1) != (p2 == g2):   # acerto los goles de exactamente un equipo
+        pts += 2
+    return pts
+
+
+def ranking_puntos_esperados(ranking):
+    """
+    Recibe el ranking de predecir() [(marcador, prob_%)] y devuelve
+    [(marcador, pts_esperados)] ordenado por puntos esperados de quiniela.
+
+    La diferencia con el ranking por probabilidad: un marcador puede ser
+    menos probable como exacto pero sumar mas puntos en promedio, porque
+    cuando no acierta exacto igual rasca 5 o 7 puntos.
+    """
+    # reconstruir distribucion (prob en fraccion)
+    dist = []
+    for score, prob in ranking:
+        i, j = map(int, score.split("-"))
+        dist.append(((i, j), prob / 100.0))
+
+    out = []
+    for (pi, pj), _ in dist:
+        ev = sum(p * _pts_quiniela((pi, pj), real) for real, p in dist)
+        out.append((f"{pi}-{pj}", round(ev, 2)))
+
+    out.sort(key=lambda x: -x[1])
+    return out
+
+
 if __name__ == "__main__":
     import sys
     sys.stdout.reconfigure(encoding="utf-8")

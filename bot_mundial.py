@@ -2,7 +2,7 @@
 import os, sys, time, threading, requests
 from datetime import datetime
 from pytz import timezone
-from modelo import predecir   # Poisson + Dixon-Coles + prior historico del Mundial
+from modelo import predecir, ranking_puntos_esperados   # Poisson + DC + prior + EV de quiniela
 import historial              # guarda las predicciones (volumen Railway)
 import sheets_mundial         # lee resultados que el usuario carga a mano en Google Sheets
 
@@ -59,13 +59,16 @@ def build_resultado(estado):
     )
     picks = ranking[:5]
 
+    # ranking por puntos esperados de quiniela (no por probabilidad)
+    ev_ranking = ranking_puntos_esperados(ranking)
+    mejor_ev = ev_ranking[0]          # (marcador, pts esperados)
+
     # registrar la prediccion (para luego preguntar el resultado)
     fecha = estado.get("fecha_partido")
     historial.registrar_prediccion(team1, team2, ranking, fecha_partido=fecha)
 
-    # guardar top-1 en la planilla (columnas Pred 1 / Pred 2)
-    top_score = picks[0][0]  # ej: "1-0"
-    pg1, pg2 = map(int, top_score.split("-"))
+    # guardar el pick de max puntos en la planilla (columnas Pred 1 / Pred 2)
+    pg1, pg2 = map(int, mejor_ev[0].split("-"))
     sheets_mundial.registrar_prediccion(team1, team2, pg1, pg2)
 
     aprendidos = sum(extra_nd.values()) + sum(extra_d.values())
@@ -96,15 +99,27 @@ def build_resultado(estado):
         marca = ">>>" if i == 1 else "   "
         lineas.append(f"{marca} {i}. {score}   ({prob}%)")
 
-    lineas += ["", f"CONSERVADOR : {picks[0][0]}", f"AGRESIVO    : {picks[2][0]}"]
+    lineas += [
+        "",
+        "Por puntos esperados de quiniela:",
+    ]
+    for score, ev in ev_ranking[:3]:
+        lineas.append(f"   {score}: {ev} pts/partido")
+
+    lineas += [
+        "",
+        f"MAX PUNTOS  : {mejor_ev[0]}  ({mejor_ev[1]} pts esperados)",
+        f"AGRESIVO    : {picks[2][0]}",
+    ]
 
     n_reales = len(resultados_reales)
     if n_reales:
         lineas += ["", f"Aprendiendo de {n_reales} partido(s) real(es) de este Mundial."]
-    else:
-        lineas += ["", "Sin resultados de este Mundial aun (usando solo historico)."]
+    if n_reales == 20:
+        lineas += ["", "AVISO: ya hay 20 partidos jugados. Buen momento para",
+                   "recalibrar el peso del historico (backtest de W_HIST)."]
 
-    return "\n".join(lineas), picks[0][0], picks[2][0]
+    return "\n".join(lineas), mejor_ev[0], picks[2][0]
 
 
 def parse_marcador(text):
