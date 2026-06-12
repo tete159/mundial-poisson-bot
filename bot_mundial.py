@@ -30,6 +30,7 @@ PASOS = [
     ("o2",    "Cuota victoria {equipo2} (2)?"),
     ("over",  "Cuota Over 2.5 goles?"),
     ("under", "Cuota Under 2.5 goles?"),
+    ("btts",  "Cuota 'Ambos equipos anotan - Si'? (si no tenes, manda 0)"),
 ]
 
 # ==================== ANALISIS ====================
@@ -39,11 +40,13 @@ def build_resultado(estado):
     team2 = estado["equipo2"]
     o1, ox, o2 = estado["o1"], estado["ox"], estado["o2"]
     over, under = estado["over"], estado["under"]
+    btts = estado.get("btts")
+    btts_odds = btts if btts and btts > 1.01 else None
 
     # resultados reales ya jugados -> alimentan el prior del modelo
     extra_nd, extra_d = _prior_combinado()
     ranking, (xg1, xg2, total_xg) = predecir(
-        o1, ox, o2, over, extra_nodraw=extra_nd, extra_draw=extra_d
+        o1, ox, o2, over, btts_si_odds=btts_odds, extra_nodraw=extra_nd, extra_draw=extra_d
     )
     picks = ranking[:5]
 
@@ -69,7 +72,7 @@ def build_resultado(estado):
         f"  {team1}: {o1}",
         f"  Empate: {ox}",
         f"  {team2}: {o2}",
-        f"  Over 2.5: {over}  Under 2.5: {under}",
+        f"  Over 2.5: {over}  Under 2.5: {under}" + (f"  BTTS Si: {btts}" if btts_odds else ""),
         "",
         f"Goles esperados:",
         f"  {team1}: {xg1:.2f}  |  {team2}: {xg2:.2f}",

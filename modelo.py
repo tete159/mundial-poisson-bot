@@ -139,13 +139,42 @@ def matriz_historica(p1, px, p2, extra_nodraw=None, extra_draw=None):
 
 # ==================== BLEND FINAL ====================
 
-def predecir(o1, ox, o2, over_odds, w_hist=W_HIST, extra_nodraw=None, extra_draw=None):
+def ajustar_btts(M, xg1, xg2, btts_si_odds):
+    """
+    Reescala las probabilidades usando la cuota BTTS Si.
+    Sube marcadores donde ambos equipos anotan (i>0 y j>0),
+    baja los que tienen un equipo en cero.
+    """
+    p_btts = min(max(1.0 / btts_si_odds, 0.05), 0.95)
+
+    # probabilidad actual de BTTS segun la matriz
+    p_btts_actual = sum(p for (i, j), p in M.items() if i > 0 and j > 0)
+    if p_btts_actual <= 0 or p_btts_actual >= 1:
+        return M
+
+    # factor de escala: cuanto subir los marcadores BTTS vs los no-BTTS
+    scale_btts     = p_btts / p_btts_actual
+    scale_no_btts  = (1 - p_btts) / (1 - p_btts_actual)
+
+    M2 = {}
+    for (i, j), p in M.items():
+        if i > 0 and j > 0:
+            M2[(i, j)] = p * scale_btts
+        else:
+            M2[(i, j)] = p * scale_no_btts
+
+    # renormalizar
+    total = sum(M2.values())
+    return {k: v / total for k, v in M2.items()}
+
+
+def predecir(o1, ox, o2, over_odds, btts_si_odds=None, w_hist=W_HIST, extra_nodraw=None, extra_draw=None):
     """
     Devuelve lista [(marcador, prob_%)] ordenada de mayor a menor,
     combinando Poisson+DixonColes con el prior historico del Mundial.
 
-    extra_nodraw / extra_draw: resultados reales ya jugados (del historial),
-    que se suman al prior para que el modelo aprenda sobre la marcha.
+    btts_si_odds: cuota Bet365 "Ambos equipos anotan - Si" (opcional).
+    extra_nodraw / extra_draw: resultados reales ya jugados (del historial).
     """
     p1, px, p2 = _no_vig(o1, ox, o2)
 
@@ -158,6 +187,10 @@ def predecir(o1, ox, o2, over_odds, w_hist=W_HIST, extra_nodraw=None, extra_draw
     final = {}
     for k in M_dc:
         final[k] = (1 - w_hist) * M_dc[k] + w_hist * M_hist[k]
+
+    # ajuste BTTS si se provee la cuota
+    if btts_si_odds is not None:
+        final = ajustar_btts(final, xg1, xg2, btts_si_odds)
 
     # ordenar y formatear
     ranking = sorted(final.items(), key=lambda x: -x[1])
