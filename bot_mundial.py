@@ -5,6 +5,7 @@ from pytz import timezone
 from modelo import predecir, ranking_puntos_esperados   # Poisson + DC + prior + EV de quiniela
 import historial              # guarda las predicciones (volumen Railway)
 import sheets_mundial         # lee resultados que el usuario carga a mano en Google Sheets
+import sync_resultados        # sincroniza resultados finales desde the-odds-api
 
 
 def _prior_combinado():
@@ -499,7 +500,11 @@ def monitor_partidos():
                     iniciar_partido(TG_CHAT_ID, p["equipo1"], p["equipo2"],
                                     fecha_partido=p["commence"])
 
-            # resultados se cargan por la planilla de Google Sheets (no por Telegram)
+            # sincronizar resultados finales desde the-odds-api a la planilla
+            if sheets_mundial.disponible():
+                ws = sheets_mundial._abrir()
+                if ws:
+                    sync_resultados.sincronizar(ws)
         except Exception as e:
             print(f"[ERROR monitor] {e}")
         time.sleep(60)
