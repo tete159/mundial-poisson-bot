@@ -98,12 +98,11 @@ def build_resultado(estado):
 
     lineas += ["", f"ELEGIR: {picks[0][0]}", f"CONTRARIAN: {picks[2][0]}"]
 
-    if resultados_reales:
-        lineas += ["", "Resultados de este Mundial que tome en cuenta:"]
-        for r in resultados_reales:
-            lineas.append(f"  {r['equipo1']} {r['g1']}-{r['g2']} {r['equipo2']}")
+    n_reales = len(resultados_reales)
+    if n_reales:
+        lineas += ["", f"Aprendiendo de {n_reales} partido(s) real(es) de este Mundial."]
     else:
-        lineas += ["", "(Sin resultados de este Mundial aun - usando solo historico)"]
+        lineas += ["", "Sin resultados de este Mundial aun (usando solo historico)."]
 
     return "\n".join(lineas)
 
