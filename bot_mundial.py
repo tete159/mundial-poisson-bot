@@ -30,7 +30,8 @@ PASOS = [
     ("o2",    "Cuota victoria {equipo2} (2)?"),
     ("over",  "Cuota Over 2.5 goles?"),
     ("under", "Cuota Under 2.5 goles?"),
-    ("btts",  "Cuota 'Ambos equipos anotan - Si'? (si no tenes, manda 0)"),
+    ("btts_si", "Cuota 'Ambos equipos anotan - Si'? (si no tenes, manda 0)"),
+    ("btts_no", "Cuota 'Ambos equipos anotan - No'? (si no tenes, manda 0)"),
 ]
 
 # ==================== ANALISIS ====================
@@ -40,8 +41,16 @@ def build_resultado(estado):
     team2 = estado["equipo2"]
     o1, ox, o2 = estado["o1"], estado["ox"], estado["o2"]
     over, under = estado["over"], estado["under"]
-    btts = estado.get("btts")
-    btts_odds = btts if btts and btts > 1.01 else None
+    btts_si = estado.get("btts_si")
+    btts_no = estado.get("btts_no")
+    # quitar vig de las cuotas BTTS y calcular prob real de Si
+    if btts_si and btts_no and btts_si > 1.01 and btts_no > 1.01:
+        p_si = (1/btts_si) / (1/btts_si + 1/btts_no)
+        btts_odds = 1 / p_si  # cuota sin vig
+    elif btts_si and btts_si > 1.01:
+        btts_odds = btts_si
+    else:
+        btts_odds = None
 
     # resultados reales ya jugados -> alimentan el prior del modelo
     extra_nd, extra_d = _prior_combinado()
@@ -72,7 +81,7 @@ def build_resultado(estado):
         f"  {team1}: {o1}",
         f"  Empate: {ox}",
         f"  {team2}: {o2}",
-        f"  Over 2.5: {over}  Under 2.5: {under}" + (f"  BTTS Si: {btts}" if btts_odds else ""),
+        f"  Over 2.5: {over}  Under 2.5: {under}" + (f"  BTTS: {btts_si}/{btts_no}" if btts_odds else ""),
         "",
         f"Goles esperados:",
         f"  {team1}: {xg1:.2f}  |  {team2}: {xg2:.2f}",
