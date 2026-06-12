@@ -96,7 +96,7 @@ def build_resultado(estado):
         marca = ">>>" if i == 1 else "   "
         lineas.append(f"{marca} {i}. {score}   ({prob}%)")
 
-    lineas += ["", f"ELEGIR: {picks[0][0]}", f"CONTRARIAN: {picks[2][0]}"]
+    lineas += ["", f"CONSERVADOR : {picks[0][0]}", f"AGRESIVO    : {picks[2][0]}"]
 
     n_reales = len(resultados_reales)
     if n_reales:
@@ -104,7 +104,7 @@ def build_resultado(estado):
     else:
         lineas += ["", "Sin resultados de este Mundial aun (usando solo historico)."]
 
-    return "\n".join(lineas)
+    return "\n".join(lineas), picks[0][0], picks[2][0]
 
 
 def parse_marcador(text):
@@ -293,6 +293,74 @@ def procesar_mensaje(chat_id, text):
             send(chat_id, "No encontre ese partido, pero gracias igual.")
         return
 
+    if estado.get("step") == "esperar_pts_mios":
+        try:
+            pts_mios = int(float(text.strip()))
+        except ValueError:
+            send(chat_id, "Manda solo un numero.")
+            return
+        if pts_mios == 0:
+            estados.pop(chat_id, None)
+            send(chat_id, f"OK. Jugate el CONSERVADOR: {estado['conservador']}")
+            return
+        estado["pts_mios"] = pts_mios
+        estado["step"] = "esperar_pts_lider"
+        send(chat_id, "Cuantos puntos tiene el primero?")
+        return
+
+    if estado.get("step") == "esperar_pts_lider":
+        try:
+            pts_lider = int(float(text.strip()))
+        except ValueError:
+            send(chat_id, "Manda solo un numero.")
+            return
+        estado["pts_lider"] = pts_lider
+        estado["step"] = "esperar_partidos_restantes"
+        send(chat_id, "Cuantos partidos faltan en la quiniela?")
+        return
+
+    if estado.get("step") == "esperar_partidos_restantes":
+        try:
+            restantes = int(float(text.strip()))
+        except ValueError:
+            send(chat_id, "Manda solo un numero.")
+            return
+        estados.pop(chat_id, None)
+
+        pts_mios   = estado["pts_mios"]
+        pts_lider  = estado["pts_lider"]
+        deficit    = pts_lider - pts_mios
+        conservador = estado["conservador"]
+        agresivo    = estado["agresivo"]
+
+        if deficit <= 0:
+            # voy primero
+            rec = conservador
+            razon = "Vas primero, protege el liderazgo."
+        elif restantes == 0:
+            rec = agresivo
+            razon = "No quedan partidos, el torneo ya termino."
+        else:
+            deficit_por_partido = deficit / restantes
+            # con top-1 el promedio esperado es ~7 pts/partido
+            # si el deficit por partido supera ~5, hay que arriesgar
+            if deficit_por_partido > 5:
+                rec = agresivo
+                razon = f"Vas {deficit}p abajo con {restantes} partidos: necesitas arriesgar."
+            elif deficit_por_partido > 2:
+                rec = agresivo
+                razon = f"Vas {deficit}p abajo con {restantes} partidos: conviene ser agresivo."
+            else:
+                rec = conservador
+                razon = f"Vas {deficit}p abajo con {restantes} partidos: podes recuperar jugando seguro."
+
+        send(chat_id,
+             f"ESTRATEGIA RECOMENDADA\n\n"
+             f"Vos: {pts_mios}p  |  Lider: {pts_lider}p  |  Restantes: {restantes}\n\n"
+             f"{razon}\n\n"
+             f">>> JUGÁ: {rec}")
+        return
+
     if estado.get("step") == "elegir_partido":
         opciones = estado["opciones"]
         try:
@@ -338,9 +406,15 @@ def procesar_mensaje(chat_id, text):
         pregunta = PASOS[step][1].format(equipo1=estado["equipo1"], equipo2=estado["equipo2"])
         send(chat_id, pregunta)
     else:
-        resultado = build_resultado(estado)
-        send(chat_id, resultado)
-        estados.pop(chat_id, None)
+        texto, conservador, agresivo = build_resultado(estado)
+        send(chat_id, texto)
+        # guardar opciones y pedir puntos para recomendar estrategia
+        estados[chat_id] = {
+            "step": "esperar_pts_mios",
+            "conservador": conservador,
+            "agresivo": agresivo,
+        }
+        send(chat_id, "Cuantos puntos tenes vos en la quiniela?\n(manda 0 si no sabés o no querés estrategia)")
         print(f"[OK] Analisis enviado: {estado['equipo1']} vs {estado['equipo2']}")
 
 # ==================== MONITOR AUTOMATICO ====================
