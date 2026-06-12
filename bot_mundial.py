@@ -314,24 +314,15 @@ def procesar_mensaje(chat_id, text):
         except ValueError:
             send(chat_id, "Manda solo un numero.")
             return
-        estado["pts_lider"] = pts_lider
-        estado["step"] = "esperar_partidos_restantes"
-        send(chat_id, "Cuantos partidos faltan en la quiniela?")
-        return
-
-    if estado.get("step") == "esperar_partidos_restantes":
-        try:
-            restantes = int(float(text.strip()))
-        except ValueError:
-            send(chat_id, "Manda solo un numero.")
-            return
         estados.pop(chat_id, None)
 
-        pts_mios   = estado["pts_mios"]
-        pts_lider  = estado["pts_lider"]
-        deficit    = pts_lider - pts_mios
+        pts_mios    = estado["pts_mios"]
+        pts_lider   = pts_lider
+        deficit     = pts_lider - pts_mios
         conservador = estado["conservador"]
         agresivo    = estado["agresivo"]
+        jugados     = len(sheets_mundial.leer_resultados())
+        restantes   = max(104 - jugados, 1)
 
         if deficit <= 0:
             # voy primero
