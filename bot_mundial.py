@@ -118,6 +118,10 @@ def build_resultado(estado):
     if n_reales == 20:
         lineas += ["", "AVISO: ya hay 20 partidos jugados. Buen momento para",
                    "recalibrar el peso del historico (backtest de W_HIST)."]
+    if n_reales >= 72:
+        lineas += ["", "AVISO: FASE ELIMINATORIA. A partir de aca los empates",
+                   "en 90/120 min cuentan distinto y los equipos especulan mas.",
+                   "Recorda que tenemos pendiente ajustar el prior por fase."]
 
     return "\n".join(lineas), mejor_ev[0], picks[2][0]
 
