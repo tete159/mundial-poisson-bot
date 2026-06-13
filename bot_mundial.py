@@ -72,58 +72,18 @@ def build_resultado(estado):
     pg1, pg2 = map(int, mejor_ev[0].split("-"))
     sheets_mundial.registrar_prediccion(team1, team2, pg1, pg2)
 
-    aprendidos = sum(extra_nd.values()) + sum(extra_d.values())
-    nota_aprendizaje = f"  (ajustado con {aprendidos} resultados reales)" if aprendidos else ""
-
-    # partidos reales ya jugados que alimentan el modelo
-    resultados_reales = sheets_mundial.leer_resultados()
-
-
-    lineas = [
-        "MUNDIAL 2026 - Prediccion de marcador",
-        "(Poisson + Dixon-Coles + historico Mundial)" + nota_aprendizaje,
-        "",
-        f"{team1} vs {team2}",
-        "",
-        f"Cuotas Bet365:",
-        f"  {team1}: {o1}",
-        f"  Empate: {ox}",
-        f"  {team2}: {o2}",
-        f"  Over 2.5: {over}  Under 2.5: {under}" + (f"  BTTS: {btts_si}/{btts_no}" if btts_odds else ""),
-        "",
-        f"Goles esperados:",
-        f"  {team1}: {xg1:.2f}  |  {team2}: {xg2:.2f}",
-        "",
-        "Top resultados:",
-    ]
-    for i, (score, prob) in enumerate(picks, 1):
-        marca = ">>>" if i == 1 else "   "
-        lineas.append(f"{marca} {i}. {score}   ({prob}%)")
-
-    lineas += [
-        "",
-        "Por puntos esperados de quiniela:",
-    ]
-    for score, ev in ev_ranking[:3]:
-        lineas.append(f"   {score}: {ev} pts/partido")
-
-    # las opciones de juego se muestran al final, con nombres de equipos
     def con_equipos(score):
         g1, g2 = score.split("-")
         return f"{team1} {g1} - {team2} {g2}"
 
-    n_reales = len(resultados_reales)
-    if n_reales:
-        lineas += ["", f"Aprendiendo de {n_reales} partido(s) real(es) de este Mundial."]
+    n_reales = len(sheets_mundial.leer_resultados())
+    avisos = []
     if n_reales == 20:
-        lineas += ["", "AVISO: ya hay 20 partidos jugados. Buen momento para",
-                   "recalibrar el peso del historico (backtest de W_HIST)."]
+        avisos.append("AVISO: 20 partidos jugados. Momento de recalibrar el modelo.")
     if n_reales >= 72:
-        lineas += ["", "AVISO: FASE ELIMINATORIA. A partir de aca los empates",
-                   "en 90/120 min cuentan distinto y los equipos especulan mas.",
-                   "Recorda que tenemos pendiente ajustar el prior por fase."]
+        avisos.append("AVISO: FASE ELIMINATORIA. Pendiente ajustar el prior por fase.")
 
-    return "\n".join(lineas), mejor_ev[0], picks[2][0], con_equipos
+    return "\n".join(avisos) if avisos else "", mejor_ev[0], picks[2][0], con_equipos
 
 
 def parse_marcador(text):
@@ -404,8 +364,9 @@ def procesar_mensaje(chat_id, text):
         pregunta = PASOS[step][1].format(equipo1=estado["equipo1"], equipo2=estado["equipo2"])
         send(chat_id, pregunta)
     else:
-        texto, conservador, agresivo, con_equipos = build_resultado(estado)
-        send(chat_id, texto)
+        avisos, conservador, agresivo, con_equipos = build_resultado(estado)
+        if avisos:
+            send(chat_id, avisos)
         # calcular mis puntos desde la planilla
         def _calc_pts(r):
             p1, p2, g1, g2 = r["pred_g1"], r["pred_g2"], r["g1"], r["g2"]
