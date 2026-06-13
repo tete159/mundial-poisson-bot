@@ -347,9 +347,14 @@ def procesar_mensaje(chat_id, text):
                 rec   = conservador
                 razon = f"Vas {deficit}p abajo con {restantes} partidos: podes recuperar jugando seguro."
 
+        prom_mio   = pts_mios / jugados if jugados else 0
+        prom_lider = pts_lider / jugados if jugados else 0
+
         send(chat_id,
              f"ESTRATEGIA RECOMENDADA\n\n"
-             f"Vos: {pts_mios}p  |  Lider: {pts_lider}p  |  Restantes: {restantes}\n\n"
+             f"Vos: {pts_mios}p ({prom_mio:.1f}/partido)  |  "
+             f"Lider: {pts_lider}p ({prom_lider:.1f}/partido)\n"
+             f"Jugados: {jugados}  |  Restantes: {restantes}\n\n"
              f"{razon}\n\n"
              f">>> JUGA: {con_equipos(rec)}")
         return
