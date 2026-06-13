@@ -311,12 +311,11 @@ def procesar_mensaje(chat_id, text):
         prom_lider = pts_lider / jugados if jugados else 0
 
         send(chat_id,
-             f"ESTRATEGIA RECOMENDADA\n\n"
-             f"Vos: {pts_mios}p ({prom_mio:.1f}/partido)  |  "
-             f"Lider: {pts_lider}p ({prom_lider:.1f}/partido)\n"
-             f"Jugados: {jugados}  |  Restantes: {restantes}\n\n"
+             f">>> JUGA: {con_equipos(rec)}\n\n"
              f"{razon}\n\n"
-             f">>> JUGA: {con_equipos(rec)}")
+             f"Vos:    {pts_mios}p  ({prom_mio:.1f}/partido)\n"
+             f"Lider:  {pts_lider}p  ({prom_lider:.1f}/partido)\n"
+             f"Jugados: {jugados}  |  Restantes: {restantes}")
         return
 
     if estado.get("step") == "elegir_partido":
