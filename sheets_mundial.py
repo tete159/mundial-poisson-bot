@@ -143,6 +143,24 @@ def registrar_prediccion(equipo1, equipo2, pred_g1, pred_g2, pts_lider=None):
         print(f"[ERROR sheets pred] {e}")
 
 
+def registrar_pts_lider(equipo1, equipo2, pts_lider):
+    """Escribe solo pts_lider en columna I para el partido dado."""
+    ws = _abrir()
+    if ws is None:
+        return
+    try:
+        registros = ws.get_all_records(expected_headers=[])
+        for i, r in enumerate(registros, start=2):
+            e1 = str(r.get("Equipo 1", "")).strip().lower()
+            e2 = str(r.get("Equipo 2", "")).strip().lower()
+            if e1 == equipo1.strip().lower() and e2 == equipo2.strip().lower():
+                ws.update(values=[[pts_lider]], range_name=f"I{i}")
+                print(f"[Sheets] pts_lider={pts_lider} guardado en {equipo1} vs {equipo2}")
+                return
+    except Exception as e:
+        print(f"[ERROR sheets pts_lider] {e}")
+
+
 def leer_historial_con_lider():
     """Devuelve filas con resultado real, prediccion Y puntos del lider (col I)."""
     ws = _abrir()
