@@ -48,7 +48,7 @@ def leer_resultados():
 
     out = []
     try:
-        registros = ws.get_all_records()  # usa fila 1 como headers
+        registros = ws.get_all_records(expected_headers=["Fecha","Equipo 1","Equipo 2","Goles 1","Goles 2","Pred 1","Pred 2","Puntos"])
     except Exception as e:
         print(f"[ERROR sheets read] {e}")
         return []
@@ -95,7 +95,7 @@ def leer_resultados_con_pred():
     if ws is None:
         return []
     try:
-        registros = ws.get_all_records()
+        registros = ws.get_all_records(expected_headers=["Fecha","Equipo 1","Equipo 2","Goles 1","Goles 2","Pred 1","Pred 2","Puntos"])
     except Exception as e:
         print(f"[ERROR sheets read] {e}")
         return []
