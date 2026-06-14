@@ -121,24 +121,65 @@ def leer_resultados_con_pred():
     return out
 
 
-def registrar_prediccion(equipo1, equipo2, pred_g1, pred_g2):
-    """Escribe la prediccion top-1 en las columnas Pred 1 / Pred 2 del partido."""
+def registrar_prediccion(equipo1, equipo2, pred_g1, pred_g2, pts_lider=None):
+    """Escribe la prediccion top-1 en F/G y opcionalmente pts del lider en I."""
     ws = _abrir()
     if ws is None:
         return
     try:
         registros = ws.get_all_records()
-        for i, r in enumerate(registros, start=2):  # fila 2 en adelante
+        for i, r in enumerate(registros, start=2):
             e1 = str(r.get("Equipo 1", "")).strip().lower()
             e2 = str(r.get("Equipo 2", "")).strip().lower()
             if e1 == equipo1.strip().lower() and e2 == equipo2.strip().lower():
                 ws.update(values=[[pred_g1, pred_g2]], range_name=f"F{i}:G{i}")
+                if pts_lider is not None:
+                    ws.update(values=[[pts_lider]], range_name=f"I{i}")
                 print(f"[Sheets] Prediccion {pred_g1}-{pred_g2} guardada para {equipo1} vs {equipo2}")
-                _cache["rows"] = None  # invalidar cache
+                _cache["rows"] = None
                 return
         print(f"[Sheets] No encontre la fila de {equipo1} vs {equipo2}")
     except Exception as e:
         print(f"[ERROR sheets pred] {e}")
+
+
+def leer_historial_con_lider():
+    """Devuelve filas con resultado real, prediccion Y puntos del lider (col I)."""
+    ws = _abrir()
+    if ws is None:
+        return []
+    try:
+        registros = ws.get_all_records(
+            expected_headers=["Fecha","Equipo 1","Equipo 2","Goles 1","Goles 2",
+                              "Pred 1","Pred 2","Puntos"]
+        )
+        col_i = ws.col_values(9)  # columna I (1-indexed)
+    except Exception as e:
+        print(f"[ERROR sheets historial] {e}")
+        return []
+
+    out = []
+    for idx, r in enumerate(registros):
+        g1 = str(r.get("Goles 1", "")).strip()
+        g2 = str(r.get("Goles 2", "")).strip()
+        p1 = str(r.get("Pred 1", "")).strip()
+        p2 = str(r.get("Pred 2", "")).strip()
+        if not all([g1, g2, p1, p2]):
+            continue
+        try:
+            fila_i = col_i[idx + 1] if idx + 1 < len(col_i) else ""
+            pts_lider = int(float(fila_i)) if fila_i else None
+            out.append({
+                "fecha":    str(r.get("Fecha", "")),
+                "equipo1":  str(r.get("Equipo 1", "")).strip(),
+                "equipo2":  str(r.get("Equipo 2", "")).strip(),
+                "g1": int(g1), "g2": int(g2),
+                "pred_g1": int(float(p1)), "pred_g2": int(float(p2)),
+                "pts_lider": pts_lider,
+            })
+        except ValueError:
+            continue
+    return out
 
 
 def disponible():

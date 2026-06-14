@@ -79,11 +79,54 @@ def build_resultado(estado):
     n_reales = len(sheets_mundial.leer_resultados())
     avisos = []
     if n_reales == 20:
-        avisos.append("AVISO: 20 partidos jugados. Momento de recalibrar el modelo.")
-    if n_reales >= 72:
-        avisos.append("AVISO: FASE ELIMINATORIA. Pendiente ajustar el prior por fase.")
+        avisos.append(
+            "⚠️ 20 PARTIDOS JUGADOS — momento de hacer el backtest:\n\n"
+            "Ya hay suficientes resultados reales del Mundial 2026 para\n"
+            "evaluar si W_HIST = 0.45 es el valor óptimo.\n\n"
+            "Qué hacer:\n"
+            "  1. Correr _backtest_abr_may.py contra los 20 resultados reales\n"
+            "  2. Ver qué valor de W_HIST maximiza puntos en esos 20 partidos\n"
+            "  3. Si el óptimo difiere mucho de 0.45, ajustarlo en modelo.py\n\n"
+            "Confirmá cuando estés listo para hacer el backtest."
+        )
+    if n_reales == 36:
+        avisos.append(
+            "📊 MITAD DE GRUPOS — diagnóstico del modelo:\n\n"
+            "36 partidos jugados. Momento de ver cómo viene el modelo.\n\n"
+            "Qué revisar:\n"
+            "  1. /historial → fijate el promedio de puntos por partido\n"
+            "  2. Si estás por debajo de 4.5 pts/partido, algo está fallando\n"
+            "  3. Si estás por encima de 5.5 pts/partido, el modelo está fino\n"
+            "  4. Meta para ganar el Prode: ~5.4 pts/partido (Monte Carlo p99)\n\n"
+            "No hace falta cambiar nada todavía — solo diagnosticar."
+        )
+    if n_reales == 88:
+        avisos.append(
+            "🔬 FIN DE DIECISEISAVOS — recalibración con datos reales:\n\n"
+            "Ya tenés 16 partidos eliminatorios de este Mundial para comparar\n"
+            "contra el histórico de 9 mundiales.\n\n"
+            "Qué revisar:\n"
+            "  1. ¿Cuántos fueron a penales? Histórico: ~22% (3-4 de 16)\n"
+            "  2. ¿Muchos 0-0 y 1-1? → subir más el RHO negativo\n"
+            "  3. ¿Muchos goles? → bajar W_HIST, confiar más en las cuotas\n"
+            "  4. Quedan octavos + cuartos + semis + final = 15 partidos clave\n\n"
+            "Confirmá para hacer el ajuste fino antes de octavos."
+        )
+    if n_reales == 72:
+        avisos.append(
+            "⚠️ FASE ELIMINATORIA — momento de ajustar el modelo:\n\n"
+            "Análisis de 9 mundiales (144 partidos eliminatorios) muestra:\n"
+            "• 2-1 y 1-0 = 43% de todos los resultados (igual que grupos)\n"
+            "• Empates son más frecuentes: 22% van a penales vs 18% en grupos\n"
+            "• 0-0 aparece mucho más (8% de partidos) — juego más defensivo\n"
+            "• Cuartos y la Final son las fases con más penales (~31-33%)\n\n"
+            "Ajustes sugeridos en modelo.py:\n"
+            "  RHO = -0.12  (más negativo → más empates bajos)\n"
+            "  W_HIST = 0.50  (subir prior → más peso a la historia)\n\n"
+            "Confirmá cuando estés listo para hacer el cambio."
+        )
 
-    return "\n".join(avisos) if avisos else "", mejor_ev[0], picks[2][0], con_equipos
+    return "\n".join(avisos) if avisos else "", mejor_ev[0], picks[2][0], con_equipos, pg1, pg2
 
 
 def parse_marcador(text):
@@ -144,7 +187,6 @@ def preguntar_resultado(chat_id, pred):
 
 
 def texto_historial():
-    # Leer resultados de la planilla (Goles 1/2 + Pred 1/2)
     resultados = sheets_mundial.leer_resultados_con_pred()
     if not resultados:
         return "Todavia no hay resultados cargados.\nCarga los resultados en la planilla de Google Sheets cuando terminen los partidos."
@@ -310,6 +352,15 @@ def procesar_mensaje(chat_id, text):
         prom_mio   = pts_mios / jugados if jugados else 0
         prom_lider = pts_lider / jugados if jugados else 0
 
+        # Guardar pts_lider en columna I de la planilla
+        eq1 = estado.get("equipo1", "")
+        eq2 = estado.get("equipo2", "")
+        if eq1 and eq2:
+            pred_g1 = estado.get("pred_g1")
+            pred_g2 = estado.get("pred_g2")
+            if pred_g1 is not None and pred_g2 is not None:
+                sheets_mundial.registrar_prediccion(eq1, eq2, pred_g1, pred_g2, pts_lider=pts_lider)
+
         send(chat_id,
              f">>> JUGA: {con_equipos(rec)}\n\n"
              f"{razon}\n\n"
@@ -363,7 +414,7 @@ def procesar_mensaje(chat_id, text):
         pregunta = PASOS[step][1].format(equipo1=estado["equipo1"], equipo2=estado["equipo2"])
         send(chat_id, pregunta)
     else:
-        avisos, conservador, agresivo, con_equipos = build_resultado(estado)
+        avisos, conservador, agresivo, con_equipos, pred_g1, pred_g2 = build_resultado(estado)
         if avisos:
             send(chat_id, avisos)
         # calcular mis puntos desde la planilla
@@ -384,6 +435,10 @@ def procesar_mensaje(chat_id, text):
             "agresivo": agresivo,
             "con_equipos": con_equipos,
             "pts_mios": pts_mios,
+            "equipo1": estado.get("equipo1", ""),
+            "equipo2": estado.get("equipo2", ""),
+            "pred_g1": pred_g1,
+            "pred_g2": pred_g2,
         }
         send(chat_id, f"Tus puntos (de la planilla): {pts_mios}\nCuantos tiene el primero?")
         print(f"[OK] Analisis enviado: {estado['equipo1']} vs {estado['equipo2']}")
