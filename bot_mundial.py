@@ -427,14 +427,20 @@ def procesar_mensaje(chat_id, text):
         resultados_con_pred = sheets_mundial.leer_resultados_con_pred()
         pts_mios = sum(_calc_pts(r) for r in resultados_con_pred)
 
+        # Guardar prediccion en columna F/G de la planilla
+        eq1 = estado.get("equipo1", "")
+        eq2 = estado.get("equipo2", "")
+        if eq1 and eq2 and pred_g1 is not None and pred_g2 is not None:
+            sheets_mundial.registrar_prediccion(eq1, eq2, pred_g1, pred_g2)
+
         estados[chat_id] = {
             "step": "esperar_pts_lider",
             "conservador": conservador,
             "agresivo": agresivo,
             "con_equipos": con_equipos,
             "pts_mios": pts_mios,
-            "equipo1": estado.get("equipo1", ""),
-            "equipo2": estado.get("equipo2", ""),
+            "equipo1": eq1,
+            "equipo2": eq2,
             "pred_g1": pred_g1,
             "pred_g2": pred_g2,
         }
