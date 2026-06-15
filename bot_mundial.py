@@ -242,6 +242,21 @@ def procesar_mensaje(chat_id, text):
             send(chat_id, "Nombre del equipo local?")
         return
 
+    if text == "/sync":
+        if sheets_mundial.disponible():
+            ws = sheets_mundial._abrir()
+            if ws:
+                try:
+                    sync_resultados.sincronizar(ws)
+                    send(chat_id, "Sync completado. Revisa la planilla.")
+                except Exception as e:
+                    send(chat_id, f"Error en sync: {e}")
+            else:
+                send(chat_id, "No pude abrir la planilla.")
+        else:
+            send(chat_id, "Credenciales no configuradas.")
+        return
+
     if text in ("/cancelar", "/cancel"):
         estados.pop(chat_id, None)
         send(chat_id, "Cancelado.")
