@@ -15,6 +15,18 @@ ODDS_API_KEY = os.getenv("ODDS_API_KEY", "")
 _ultimo_sync = {"t": 0}
 _SYNC_INTERVALO = 1800  # cada 30 minutos
 
+# Mapeo de nombres API -> nombre en la planilla
+NOMBRE_MAP = {
+    "côte d'ivoire": "ivory coast",
+    "cote d'ivoire": "ivory coast",
+    "cote divoire":  "ivory coast",
+    "república checa": "czech republic",
+    "czech republic": "czech republic",
+    "usa": "united states",
+    "united states of america": "united states",
+    "ir iran": "iran",
+}
+
 
 def sincronizar(ws, forzar=False):
     """Recibe el worksheet de gspread y actualiza los resultados finales."""
@@ -30,8 +42,12 @@ def sincronizar(ws, forzar=False):
         if r.status_code != 200:
             print(f"[sync] API error {r.status_code}")
             return 0
+        def normalizar(nombre):
+            n = nombre.lower().strip()
+            return NOMBRE_MAP.get(n, n)
+
         partidos_api = {
-            (m["home_team"].lower(), m["away_team"].lower()): m
+            (normalizar(m["home_team"]), normalizar(m["away_team"])): m
             for m in r.json()
             if m.get("completed") and m.get("scores")
         }
@@ -52,13 +68,13 @@ def sincronizar(ws, forzar=False):
         if g1 != "" and g2 != "":
             continue  # ya tiene resultado
 
-        e1 = str(row.get("Equipo 1", "")).strip().lower()
-        e2 = str(row.get("Equipo 2", "")).strip().lower()
+        e1 = normalizar(str(row.get("Equipo 1", "")))
+        e2 = normalizar(str(row.get("Equipo 2", "")))
         partido = partidos_api.get((e1, e2))
         if not partido:
             continue
 
-        scores = {s["name"].lower(): int(s["score"]) for s in partido["scores"]}
+        scores = {normalizar(s["name"]): int(s["score"]) for s in partido["scores"]}
         goles1 = scores.get(e1)
         goles2 = scores.get(e2)
         if goles1 is None or goles2 is None:
