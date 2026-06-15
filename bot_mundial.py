@@ -247,8 +247,8 @@ def procesar_mensaje(chat_id, text):
             ws = sheets_mundial._abrir()
             if ws:
                 try:
-                    sync_resultados.sincronizar(ws)
-                    send(chat_id, "Sync completado. Revisa la planilla.")
+                    n = sync_resultados.sincronizar(ws, forzar=True)
+                    send(chat_id, f"Sync completado. {n} resultado(s) nuevos cargados.")
                 except Exception as e:
                     send(chat_id, f"Error en sync: {e}")
             else:

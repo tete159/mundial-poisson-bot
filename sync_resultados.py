@@ -16,9 +16,9 @@ _ultimo_sync = {"t": 0}
 _SYNC_INTERVALO = 1800  # cada 30 minutos
 
 
-def sincronizar(ws):
+def sincronizar(ws, forzar=False):
     """Recibe el worksheet de gspread y actualiza los resultados finales."""
-    if time.time() - _ultimo_sync["t"] < _SYNC_INTERVALO:
+    if not forzar and time.time() - _ultimo_sync["t"] < _SYNC_INTERVALO:
         return 0
 
     try:
