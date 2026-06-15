@@ -242,6 +242,26 @@ def procesar_mensaje(chat_id, text):
             send(chat_id, "Nombre del equipo local?")
         return
 
+    if text == "/synclog":
+        try:
+            import requests as _req
+            r = _req.get(
+                "https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/scores",
+                params={"apiKey": os.getenv("ODDS_API_KEY",""), "daysFrom": 3},
+                timeout=10
+            )
+            completados = [m for m in r.json() if m.get("completed") and m.get("scores")]
+            if not completados:
+                send(chat_id, "API: no hay partidos completados en los ultimos 3 dias.")
+            else:
+                lineas = [f"Partidos completados en API ({len(completados)}):"]
+                for m in completados:
+                    lineas.append(f"  {m['home_team']} vs {m['away_team']}")
+                send(chat_id, "\n".join(lineas))
+        except Exception as e:
+            send(chat_id, f"Error: {e}")
+        return
+
     if text == "/sync":
         if sheets_mundial.disponible():
             ws = sheets_mundial._abrir()
