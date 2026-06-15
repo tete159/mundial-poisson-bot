@@ -14,7 +14,7 @@ import requests
 FDORG_TOKEN  = os.getenv("FDORG_TOKEN", "")
 FDORG_BASE   = "https://api.football-data.org/v4"
 _ultimo_sync = {"t": 0}
-_SYNC_INTERVALO = 1800  # cada 30 minutos en el monitor automatico
+_SYNC_INTERVALO = 900  # cada 15 minutos en el monitor automatico
 
 # Mapeo de nombres API -> nombre normalizado (igual que en la planilla)
 NOMBRE_MAP = {
