@@ -127,7 +127,7 @@ def registrar_prediccion(equipo1, equipo2, pred_g1, pred_g2, pts_lider=None):
     if ws is None:
         return
     try:
-        registros = ws.get_all_records()
+        registros = ws.get_all_records(expected_headers=[])
         for i, r in enumerate(registros, start=2):
             e1 = str(r.get("Equipo 1", "")).strip().lower()
             e2 = str(r.get("Equipo 2", "")).strip().lower()
@@ -292,7 +292,7 @@ def actualizar_resumen():
         deficit = pts_lider_ultimo - pts_yo
         prom_yo = round(pts_yo / jugados, 2) if jugados else 0
         prom_lider = round(pts_lider_ultimo / jugados, 2) if jugados else 0
-        META = 433
+        META = 457
         prom_necesario = round((META - pts_yo) / restantes, 2)
         proyeccion = round(pts_yo + prom_yo * restantes)
 
