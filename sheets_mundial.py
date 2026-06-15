@@ -240,6 +240,89 @@ def registrar_cs_odds(equipo1, equipo2, cs_top1, cs_top2):
         print(f"[ERROR sheets cs_odds] {e}")
 
 
+def actualizar_resumen():
+    """Recalcula y sobreescribe la hoja Resumen con KPIs actualizados."""
+    raw = os.getenv("GCP_SA_JSON")
+    if not raw or not GSHEET_ID:
+        return
+    try:
+        import gspread as _gs
+        info = json.loads(raw)
+        pk = info.get("private_key", "")
+        if "\\n" in pk and "\n" not in pk:
+            info["private_key"] = pk.replace("\\n", "\n")
+        gc = _gs.service_account_from_dict(info)
+        sh = gc.open_by_key(GSHEET_ID)
+        ws1 = sh.sheet1
+        wsr = sh.worksheet("Resumen")
+    except Exception as e:
+        print(f"[ERROR resumen abrir] {e}")
+        return
+
+    try:
+        rows = ws1.get_all_values()[1:]
+        jugados = 0
+        pts_yo = 0
+        pts_lider_ultimo = 0
+        dist = {0: 0, 2: 0, 5: 0, 7: 0, 12: 0}
+
+        for r in rows:
+            g1 = r[3].strip() if len(r) > 3 else ""
+            g2 = r[4].strip() if len(r) > 4 else ""
+            p1 = r[5].strip() if len(r) > 5 else ""
+            p2 = r[6].strip() if len(r) > 6 else ""
+            pts = r[7].strip() if len(r) > 7 else ""
+            pl  = r[8].strip() if len(r) > 8 else ""
+            if g1 and g2 and p1 and p2 and pts:
+                jugados += 1
+                try:
+                    p = int(pts)
+                    pts_yo += p
+                    dist[p] = dist.get(p, 0) + 1
+                except ValueError:
+                    pass
+            if pl:
+                try:
+                    pts_lider_ultimo = int(pl)
+                except ValueError:
+                    pass
+
+        TOTAL = 104
+        restantes = max(TOTAL - jugados, 1)
+        deficit = pts_lider_ultimo - pts_yo
+        prom_yo = round(pts_yo / jugados, 2) if jugados else 0
+        prom_lider = round(pts_lider_ultimo / jugados, 2) if jugados else 0
+        META = 433
+        prom_necesario = round((META - pts_yo) / restantes, 2)
+        proyeccion = round(pts_yo + prom_yo * restantes)
+
+        kpis = [
+            ["RESUMEN DEL PRODE - MUNDIAL 2026", "", ""],
+            [""],
+            ["Partidos jugados",  jugados,          f"de {TOTAL}"],
+            ["Mis puntos",        pts_yo,            ""],
+            ["Puntos lider",      pts_lider_ultimo,  ""],
+            ["Deficit",           deficit,           "pts atras"],
+            ["Promedio mio",      prom_yo,           "pts/partido"],
+            ["Promedio lider",    prom_lider,        "pts/partido"],
+            [""],
+            ["META para ganar",   META,              "pts (top 50%)"],
+            ["Prom. necesario",   prom_necesario,    "pts/partido restantes"],
+            ["Proyeccion final",  proyeccion,        "pts (a ritmo actual)"],
+            ["Diferencia vs meta", proyeccion - META, "pts"],
+            [""],
+            ["DISTRIBUCION DE PUNTOS", "", ""],
+            ["Exacto (12p)", "Result+goles (7p)", "Solo result (5p)", "Un gol (2p)", "Nada (0p)"],
+            [dist.get(12,0), dist.get(7,0), dist.get(5,0), dist.get(2,0), dist.get(0,0)],
+        ]
+
+        wsr.clear()
+        wsr.update(values=kpis, range_name="A1")
+        print(f"[resumen] Actualizado: {jugados} partidos, {pts_yo}pts yo, {pts_lider_ultimo}pts lider")
+    except Exception as e:
+        print(f"[ERROR resumen calcular] {e}")
+
+
 def disponible():
     """True si las credenciales y la planilla estan configuradas."""
     return bool(os.getenv("GCP_SA_JSON") and GSHEET_ID)

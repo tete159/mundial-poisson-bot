@@ -429,6 +429,7 @@ def procesar_mensaje(chat_id, text):
         eq2 = estado.get("equipo2", "")
         if eq1 and eq2:
             sheets_mundial.registrar_pts_lider_fila_anterior(eq1, eq2, pts_lider)
+            sheets_mundial.actualizar_resumen()
 
         send(chat_id,
              f">>> JUGA: {con_equipos(rec)}\n\n"
@@ -598,7 +599,9 @@ def monitor_partidos():
             if sheets_mundial.disponible():
                 ws = sheets_mundial._abrir()
                 if ws:
-                    sync_resultados.sincronizar(ws)
+                    n = sync_resultados.sincronizar(ws)
+                    if n > 0:
+                        sheets_mundial.actualizar_resumen()
         except Exception as e:
             print(f"[ERROR monitor] {e}")
         time.sleep(60)
