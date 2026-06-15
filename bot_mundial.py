@@ -353,6 +353,38 @@ def procesar_mensaje(chat_id, text):
             send(chat_id, "No encontre ese partido, pero gracias igual.")
         return
 
+    if estado.get("step") == "esperar_cs_top1":
+        cs_val = None
+        if text.lower() not in ("saltar", "s", "-", "skip"):
+            try:
+                cs_val = float(text.replace(",", "."))
+            except ValueError:
+                send(chat_id, "Ingresa la cuota (ej: 7.50) o 'saltar'.")
+                return
+        estado["cs_top1"] = cs_val
+        estado["step"] = "esperar_cs_top2"
+        send(chat_id, f"Cuota Correct Score {estado['cs_top2_marcador']} en Bet365? (o 'saltar')")
+        return
+
+    if estado.get("step") == "esperar_cs_top2":
+        cs_val = None
+        if text.lower() not in ("saltar", "s", "-", "skip"):
+            try:
+                cs_val = float(text.replace(",", "."))
+            except ValueError:
+                send(chat_id, "Ingresa la cuota (ej: 7.50) o 'saltar'.")
+                return
+        estado["cs_top2"] = cs_val
+        # guardar silenciosamente en columnas M y N
+        eq1 = estado.get("equipo1", "")
+        eq2 = estado.get("equipo2", "")
+        if eq1 and eq2:
+            sheets_mundial.registrar_cs_odds(eq1, eq2, estado.get("cs_top1"), cs_val)
+        estado["step"] = "esperar_pts_lider"
+        pts_mios = estado["pts_mios"]
+        send(chat_id, f"Tus puntos (de la planilla): {pts_mios}\nCuantos tiene el primero?")
+        return
+
     if estado.get("step") == "esperar_pts_lider":
         try:
             pts_lider = int(float(text.strip()))
@@ -473,7 +505,7 @@ def procesar_mensaje(chat_id, text):
             sheets_mundial.registrar_prediccion(eq1, eq2, pred_g1, pred_g2)
 
         estados[chat_id] = {
-            "step": "esperar_pts_lider",
+            "step": "esperar_cs_top1",
             "conservador": conservador,
             "agresivo": agresivo,
             "con_equipos": con_equipos,
@@ -482,8 +514,10 @@ def procesar_mensaje(chat_id, text):
             "equipo2": eq2,
             "pred_g1": pred_g1,
             "pred_g2": pred_g2,
+            "cs_top1_marcador": conservador,
+            "cs_top2_marcador": agresivo,
         }
-        send(chat_id, f"Tus puntos (de la planilla): {pts_mios}\nCuantos tiene el primero?")
+        send(chat_id, f"Cuota Correct Score {conservador} en Bet365? (o 'saltar')")
         print(f"[OK] Analisis enviado: {estado['equipo1']} vs {estado['equipo2']}")
 
 # ==================== MONITOR AUTOMATICO ====================

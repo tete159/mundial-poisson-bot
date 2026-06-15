@@ -221,6 +221,25 @@ def leer_historial_con_lider():
     return out
 
 
+def registrar_cs_odds(equipo1, equipo2, cs_top1, cs_top2):
+    """Guarda las cuotas de Correct Score en columnas M y N (solo para backtest)."""
+    ws = _abrir()
+    if ws is None:
+        return
+    try:
+        registros = ws.get_all_records(expected_headers=[])
+        for i, r in enumerate(registros, start=2):
+            e1 = str(r.get("Equipo 1", "")).strip().lower()
+            e2 = str(r.get("Equipo 2", "")).strip().lower()
+            if e1 == equipo1.strip().lower() and e2 == equipo2.strip().lower():
+                v1 = cs_top1 if cs_top1 is not None else ""
+                v2 = cs_top2 if cs_top2 is not None else ""
+                ws.update(values=[[v1, v2]], range_name=f"M{i}:N{i}")
+                return
+    except Exception as e:
+        print(f"[ERROR sheets cs_odds] {e}")
+
+
 def disponible():
     """True si las credenciales y la planilla estan configuradas."""
     return bool(os.getenv("GCP_SA_JSON") and GSHEET_ID)
