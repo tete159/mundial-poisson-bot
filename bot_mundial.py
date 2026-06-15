@@ -352,12 +352,12 @@ def procesar_mensaje(chat_id, text):
         prom_mio   = pts_mios / jugados if jugados else 0
         prom_lider = pts_lider / jugados if jugados else 0
 
-        # Guardar pts_lider en columna I del partido ANTERIOR
-        # (el puntaje del lider al momento de predecir = acumulado hasta el partido anterior)
-        todos = sheets_mundial.leer_resultados_con_pred()
-        if todos:
-            ant = todos[-1]
-            sheets_mundial.registrar_pts_lider(ant["equipo1"], ant["equipo2"], pts_lider)
+        # Guardar pts_lider en la fila de arriba del partido actual
+        # (el puntaje del lider al predecir el partido N = acumulado hasta N-1)
+        eq1 = estado.get("equipo1", "")
+        eq2 = estado.get("equipo2", "")
+        if eq1 and eq2:
+            sheets_mundial.registrar_pts_lider_fila_anterior(eq1, eq2, pts_lider)
 
         send(chat_id,
              f">>> JUGA: {con_equipos(rec)}\n\n"

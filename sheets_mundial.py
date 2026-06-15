@@ -161,6 +161,30 @@ def registrar_pts_lider(equipo1, equipo2, pts_lider):
         print(f"[ERROR sheets pts_lider] {e}")
 
 
+def registrar_pts_lider_fila_anterior(equipo_actual1, equipo_actual2, pts_lider):
+    """Escribe pts_lider en la fila JUSTO ARRIBA del partido actual.
+    El pts del lider al momento de predecir el partido N corresponde al
+    acumulado hasta el partido N-1, que en la planilla es la fila de arriba."""
+    ws = _abrir()
+    if ws is None:
+        return
+    try:
+        registros = ws.get_all_records(expected_headers=[])
+        for i, r in enumerate(registros, start=2):
+            e1 = str(r.get("Equipo 1", "")).strip().lower()
+            e2 = str(r.get("Equipo 2", "")).strip().lower()
+            if e1 == equipo_actual1.strip().lower() and e2 == equipo_actual2.strip().lower():
+                if i > 2:  # fila 2 = primer partido; si i>2 hay una fila de datos arriba
+                    ws.update(values=[[pts_lider]], range_name=f"I{i-1}")
+                    print(f"[Sheets] pts_lider={pts_lider} guardado en fila {i-1} (arriba de {equipo_actual1} vs {equipo_actual2})")
+                else:
+                    print("[Sheets] El partido actual es el primero, no hay fila anterior")
+                return
+        print(f"[Sheets] No encontre la fila de {equipo_actual1} vs {equipo_actual2}")
+    except Exception as e:
+        print(f"[ERROR sheets pts_lider anterior] {e}")
+
+
 def leer_historial_con_lider():
     """Devuelve filas con resultado real, prediccion Y puntos del lider (col I)."""
     ws = _abrir()
