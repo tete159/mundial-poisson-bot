@@ -250,7 +250,11 @@ def procesar_mensaje(chat_id, text):
                 params={"apiKey": os.getenv("ODDS_API_KEY",""), "daysFrom": 3},
                 timeout=10
             )
-            completados = [m for m in r.json() if m.get("completed") and m.get("scores")]
+            data = r.json()
+            if not isinstance(data, list):
+                send(chat_id, f"API error ({r.status_code}): {data}")
+                return
+            completados = [m for m in data if isinstance(m, dict) and m.get("completed") and m.get("scores")]
             if not completados:
                 send(chat_id, "API: no hay partidos completados en los ultimos 3 dias.")
             else:
