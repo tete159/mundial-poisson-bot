@@ -58,18 +58,18 @@ def build_resultado(estado):
     ranking, (xg1, xg2, total_xg) = predecir(
         o1, ox, o2, over, btts_si_odds=btts_odds, extra_nodraw=extra_nd, extra_draw=extra_d
     )
-    picks = ranking[:5]
-
-    # ranking por puntos esperados de quiniela (no por probabilidad)
-    ev_ranking = ranking_puntos_esperados(ranking)
-    mejor_ev = ev_ranking[0]          # (marcador, pts esperados)
+    # ESTRATEGIA AGRESIVA (posicion 211/244, paga top-10, nada que perder):
+    # se juega el marcador EXACTO mas probable -> caza los 12 puntos que trepan.
+    # (a diferencia del max-EV, que se conforma con el 1-0 para puntos parciales)
+    pick1 = ranking[0][0]   # marcador mas probable
+    pick2 = ranking[1][0]   # segundo mas probable (para el registro de CS)
 
     # registrar la prediccion (para luego preguntar el resultado)
     fecha = estado.get("fecha_partido")
     historial.registrar_prediccion(team1, team2, ranking, fecha_partido=fecha)
 
-    # guardar el pick de max puntos en la planilla (columnas Pred 1 / Pred 2)
-    pg1, pg2 = map(int, mejor_ev[0].split("-"))
+    # guardar el pick en la planilla (columnas Pred 1 / Pred 2)
+    pg1, pg2 = map(int, pick1.split("-"))
     sheets_mundial.registrar_prediccion(team1, team2, pg1, pg2)
 
     # guardar las 7 cuotas de entrada (cols O..U) para poder backtestear de verdad
@@ -132,7 +132,7 @@ def build_resultado(estado):
             "Confirmá cuando estés listo para hacer el cambio."
         )
 
-    return "\n".join(avisos) if avisos else "", mejor_ev[0], picks[2][0], con_equipos, pg1, pg2
+    return "\n".join(avisos) if avisos else "", pick1, pick2, con_equipos, pg1, pg2
 
 
 def parse_marcador(text):
@@ -399,33 +399,8 @@ def procesar_mensaje(chat_id, text):
             return
         estados.pop(chat_id, None)
 
-        pts_mios    = estado["pts_mios"]
-        pts_lider   = pts_lider
-        deficit     = pts_lider - pts_mios
-        conservador  = estado["conservador"]
-        agresivo     = estado["agresivo"]
-        con_equipos  = estado["con_equipos"]
-        jugados      = len(sheets_mundial.leer_resultados())
-        restantes    = max(104 - jugados, 1)
-
-        if deficit <= 0:
-            rec   = conservador
-            razon = "Vas primero, protege el liderazgo."
-        elif restantes == 0:
-            rec   = agresivo
-            razon = "No quedan partidos, el torneo ya termino."
-        else:
-            deficit_por_partido = deficit / restantes
-            if deficit_por_partido > 5:
-                rec   = agresivo
-                razon = f"Vas {deficit}p abajo con {restantes} partidos: necesitas arriesgar."
-            elif deficit_por_partido > 2:
-                rec   = agresivo
-                razon = f"Vas {deficit}p abajo con {restantes} partidos: conviene ser agresivo."
-            else:
-                rec   = conservador
-                razon = f"Vas {deficit}p abajo con {restantes} partidos: podes recuperar jugando seguro."
-
+        pts_mios   = estado["pts_mios"]
+        jugados    = len(sheets_mundial.leer_resultados())
         prom_mio   = pts_mios / jugados if jugados else 0
         prom_lider = pts_lider / jugados if jugados else 0
 
@@ -438,11 +413,10 @@ def procesar_mensaje(chat_id, text):
             sheets_mundial.actualizar_resumen()
 
         send(chat_id,
-             f">>> JUGA: {con_equipos(rec)}\n\n"
-             f"{razon}\n\n"
-             f"Vos:    {pts_mios}p  ({prom_mio:.1f}/partido)\n"
-             f"Lider:  {pts_lider}p  ({prom_lider:.1f}/partido)\n"
-             f"Jugados: {jugados}  |  Restantes: {restantes}")
+             f"Guardado.\n\n"
+             f"Vos:   {pts_mios}p  ({prom_mio:.1f}/partido)\n"
+             f"Lider: {pts_lider}p  ({prom_lider:.1f}/partido)\n"
+             f"Jugados: {jugados}")
         return
 
     if estado.get("step") == "elegir_partido":
@@ -490,7 +464,9 @@ def procesar_mensaje(chat_id, text):
         pregunta = PASOS[step][1].format(equipo1=estado["equipo1"], equipo2=estado["equipo2"])
         send(chat_id, pregunta)
     else:
-        avisos, conservador, agresivo, con_equipos, pred_g1, pred_g2 = build_resultado(estado)
+        avisos, pick1, pick2, con_equipos, pred_g1, pred_g2 = build_resultado(estado)
+        # UN SOLO RESULTADO, al toque: "JUGÁ ESTO"
+        send(chat_id, f">>> JUGÁ: {con_equipos(pick1)}")
         if avisos:
             send(chat_id, avisos)
         # calcular mis puntos desde la planilla
@@ -513,19 +489,19 @@ def procesar_mensaje(chat_id, text):
 
         estados[chat_id] = {
             "step": "esperar_cs_top1",
-            "conservador": conservador,
-            "agresivo": agresivo,
+            "pick1": pick1,
+            "pick2": pick2,
             "con_equipos": con_equipos,
             "pts_mios": pts_mios,
             "equipo1": eq1,
             "equipo2": eq2,
             "pred_g1": pred_g1,
             "pred_g2": pred_g2,
-            "cs_top1_marcador": conservador,
-            "cs_top2_marcador": agresivo,
+            "cs_top1_marcador": pick1,
+            "cs_top2_marcador": pick2,
         }
-        send(chat_id, f"Cuota Correct Score {conservador} en Bet365? (o 'saltar')")
-        print(f"[OK] Analisis enviado: {estado['equipo1']} vs {estado['equipo2']}")
+        send(chat_id, f"(registro, opcional) Cuota Correct Score {pick1}? Mandala o 'saltar'.")
+        print(f"[OK] Pick enviado: {estado['equipo1']} vs {estado['equipo2']} -> {pick1}")
 
 # ==================== MONITOR AUTOMATICO ====================
 
