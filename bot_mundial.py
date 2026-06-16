@@ -72,6 +72,12 @@ def build_resultado(estado):
     pg1, pg2 = map(int, mejor_ev[0].split("-"))
     sheets_mundial.registrar_prediccion(team1, team2, pg1, pg2)
 
+    # guardar las 7 cuotas de entrada (cols O..U) para poder backtestear de verdad
+    sheets_mundial.registrar_cuotas(
+        team1, team2, o1, ox, o2, over, under,
+        estado.get("btts_si"), estado.get("btts_no")
+    )
+
     def con_equipos(score):
         g1, g2 = score.split("-")
         return f"{team1} {g1} - {team2} {g2}"

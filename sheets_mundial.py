@@ -221,6 +221,34 @@ def leer_historial_con_lider():
     return out
 
 
+def registrar_cuotas(equipo1, equipo2, o1, ox, o2, over, under, btts_si, btts_no):
+    """Guarda las 7 cuotas de entrada en columnas O..U, para backtest real.
+    Sin las cuotas no se puede recalibrar RHO/W_HIST honestamente."""
+    ws = _abrir()
+    if ws is None:
+        return
+    try:
+        registros = ws.get_all_records(expected_headers=[])
+        # asegurar encabezados de columnas O..U (fila 1) una sola vez
+        header = ws.row_values(1)
+        if len(header) < 21 or str(header[14:21]) != "['O1', 'OX', 'O2', 'Over', 'Under', 'BTTS Si', 'BTTS No']":
+            try:
+                ws.update(values=[["O1", "OX", "O2", "Over", "Under", "BTTS Si", "BTTS No"]],
+                          range_name="O1:U1")
+            except Exception:
+                pass
+        for i, r in enumerate(registros, start=2):
+            e1 = str(r.get("Equipo 1", "")).strip().lower()
+            e2 = str(r.get("Equipo 2", "")).strip().lower()
+            if e1 == equipo1.strip().lower() and e2 == equipo2.strip().lower():
+                fila = [v if v is not None else "" for v in (o1, ox, o2, over, under, btts_si, btts_no)]
+                ws.update(values=[fila], range_name=f"O{i}:U{i}")
+                print(f"[Sheets] Cuotas guardadas para {equipo1} vs {equipo2}")
+                return
+    except Exception as e:
+        print(f"[ERROR sheets cuotas] {e}")
+
+
 def registrar_cs_odds(equipo1, equipo2, cs_top1, cs_top2):
     """Guarda las cuotas de Correct Score en columnas M y N (solo para backtest)."""
     ws = _abrir()
