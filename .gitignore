@@ -3,3 +3,5 @@ __pycache__/
 historial.json
 historial_TEST.json
 test_out.txt
+.env
+*.env
