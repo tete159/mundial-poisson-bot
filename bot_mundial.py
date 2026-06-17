@@ -368,8 +368,8 @@ def procesar_mensaje(chat_id, text):
         eq2 = estado.get("equipo2", "")
 
         if text.lower() in ("saltar", "s", "-", "skip"):
-            final = model_pick   # sin grilla -> queda el pick del modelo (ya guardado)
-            nota = "(sin grilla CS, queda el del modelo)"
+            final = model_pick   # sin grilla -> recomendacion = pick del modelo
+            nota = "(modelo)"
         else:
             # parsear los numeros de la linea y mapearlos a los candidatos en orden
             crudos = text.replace(",", " ").split()
@@ -386,18 +386,42 @@ def procesar_mensaje(chat_id, text):
                 return
             # el mercado: marcador mas probable = el de menor cuota
             final = min(pares, key=lambda x: x[1])[0]
-            # guardar la grilla cargada (string) para backtest
             grilla_str = " ".join(f"{m}:{c}" for m, c in pares)
             sheets_mundial.registrar_cs_grilla(eq1, eq2, grilla_str)
-            # sobreescribir el pick guardado en F/G con el del mercado
-            fg1, fg2 = map(int, final.split("-"))
-            sheets_mundial.registrar_prediccion(eq1, eq2, fg1, fg2)
-            nota = "(del mercado CS)" if final == model_pick else f"(mercado CS; el modelo decia {model_pick})"
+            nota = "(modelo+mercado coinciden)" if final == model_pick else f"(mercado; el modelo decia {model_pick})"
+
+        # guardar la recomendacion del bot en columna N (para comparar vs lo que jugas)
+        sheets_mundial.registrar_pick_bot(eq1, eq2, final)
+
+        estado["recomendacion"] = final
+        estado["step"] = "esperar_jugada"
+        send(chat_id,
+             f">>> El bot recomienda: {con_equipos(final)}  {nota}\n\n"
+             f"¿Qué jugás vos? Mandá tu marcador (ej: 2-0) o 'ok' para aceptar la recomendación.")
+        return
+
+    if estado.get("step") == "esperar_jugada":
+        con_equipos = estado["con_equipos"]
+        recom = estado["recomendacion"]
+        eq1 = estado.get("equipo1", "")
+        eq2 = estado.get("equipo2", "")
+        if text.lower() in ("ok", "si", "sí", "dale", "acepto", "listo", "="):
+            jugada = recom
+        else:
+            m = parse_marcador(text)
+            if not m:
+                send(chat_id, f"No entendi. Mandá tu marcador (ej: 2-0) o 'ok' para aceptar {recom}.")
+                return
+            jugada = f"{m[0]}-{m[1]}"
+        # lo que REALMENTE jugas va a F/G (es lo que mide tu tracking)
+        jg1, jg2 = map(int, jugada.split("-"))
+        sheets_mundial.registrar_prediccion(eq1, eq2, jg1, jg2)
 
         estado["step"] = "esperar_pts_lider"
         pts_mios = estado["pts_mios"]
+        extra = "" if jugada == recom else f" (distinto a la recomendación {recom})"
         send(chat_id,
-             f">>> JUGÁ: {con_equipos(final)}  {nota}\n\n"
+             f"Anotado: jugás {con_equipos(jugada)}{extra}\n\n"
              f"Tus puntos (de la planilla): {pts_mios}\nCuantos tiene el primero?")
         return
 
