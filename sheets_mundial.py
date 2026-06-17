@@ -249,6 +249,24 @@ def registrar_cuotas(equipo1, equipo2, o1, ox, o2, over, under, btts_si, btts_no
         print(f"[ERROR sheets cuotas] {e}")
 
 
+def registrar_cs_grilla(equipo1, equipo2, grilla_str):
+    """Guarda la grilla de Correct Score cargada (string '1-0:7.5 2-0:6 ...') en columna M.
+    Sirve para backtestear despues mercado vs modelo."""
+    ws = _abrir()
+    if ws is None:
+        return
+    try:
+        registros = ws.get_all_records(expected_headers=[])
+        for i, r in enumerate(registros, start=2):
+            e1 = str(r.get("Equipo 1", "")).strip().lower()
+            e2 = str(r.get("Equipo 2", "")).strip().lower()
+            if e1 == equipo1.strip().lower() and e2 == equipo2.strip().lower():
+                ws.update(values=[[grilla_str]], range_name=f"M{i}")
+                return
+    except Exception as e:
+        print(f"[ERROR sheets cs_grilla] {e}")
+
+
 def registrar_cs_odds(equipo1, equipo2, cs_top1, cs_top2):
     """Guarda las cuotas de Correct Score en columnas M y N (solo para backtest)."""
     ws = _abrir()

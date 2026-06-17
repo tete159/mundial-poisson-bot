@@ -60,15 +60,16 @@ def build_resultado(estado):
     )
     # ESTRATEGIA AGRESIVA (posicion 211/244, paga top-10, nada que perder):
     # se juega el marcador EXACTO mas probable -> caza los 12 puntos que trepan.
-    # (a diferencia del max-EV, que se conforma con el 1-0 para puntos parciales)
-    pick1 = ranking[0][0]   # marcador mas probable
-    pick2 = ranking[1][0]   # segundo mas probable (para el registro de CS)
+    # Si el usuario carga la grilla de Correct Score, el pick final sale del
+    # mercado (mejor calibrado para este Mundial que el prior historico).
+    pick1 = ranking[0][0]            # marcador mas probable del modelo (referencia / fallback)
+    top6 = [s for s, _ in ranking[:6]]  # candidatos para pedir las cuotas CS
 
     # registrar la prediccion (para luego preguntar el resultado)
     fecha = estado.get("fecha_partido")
     historial.registrar_prediccion(team1, team2, ranking, fecha_partido=fecha)
 
-    # guardar el pick en la planilla (columnas Pred 1 / Pred 2)
+    # guardar el pick del modelo como default (se sobreescribe si llega la grilla CS)
     pg1, pg2 = map(int, pick1.split("-"))
     sheets_mundial.registrar_prediccion(team1, team2, pg1, pg2)
 
@@ -132,7 +133,7 @@ def build_resultado(estado):
             "Confirmá cuando estés listo para hacer el cambio."
         )
 
-    return "\n".join(avisos) if avisos else "", pick1, pick2, con_equipos, pg1, pg2
+    return "\n".join(avisos) if avisos else "", pick1, top6, con_equipos, pg1, pg2
 
 
 def parse_marcador(text):
@@ -359,36 +360,45 @@ def procesar_mensaje(chat_id, text):
             send(chat_id, "No encontre ese partido, pero gracias igual.")
         return
 
-    if estado.get("step") == "esperar_cs_top1":
-        cs_val = None
-        if text.lower() not in ("saltar", "s", "-", "skip"):
-            try:
-                cs_val = float(text.replace(",", "."))
-            except ValueError:
-                send(chat_id, "Ingresa la cuota (ej: 7.50) o 'saltar'.")
-                return
-        estado["cs_top1"] = cs_val
-        estado["step"] = "esperar_cs_top2"
-        send(chat_id, f"Cuota Correct Score {estado['cs_top2_marcador']} en Bet365? (o 'saltar')")
-        return
-
-    if estado.get("step") == "esperar_cs_top2":
-        cs_val = None
-        if text.lower() not in ("saltar", "s", "-", "skip"):
-            try:
-                cs_val = float(text.replace(",", "."))
-            except ValueError:
-                send(chat_id, "Ingresa la cuota (ej: 7.50) o 'saltar'.")
-                return
-        estado["cs_top2"] = cs_val
-        # guardar silenciosamente en columnas M y N
+    if estado.get("step") == "esperar_cs_grilla":
+        candidatos = estado["top6"]
+        con_equipos = estado["con_equipos"]
+        model_pick = estado["pick1"]
         eq1 = estado.get("equipo1", "")
         eq2 = estado.get("equipo2", "")
-        if eq1 and eq2:
-            sheets_mundial.registrar_cs_odds(eq1, eq2, estado.get("cs_top1"), cs_val)
+
+        if text.lower() in ("saltar", "s", "-", "skip"):
+            final = model_pick   # sin grilla -> queda el pick del modelo (ya guardado)
+            nota = "(sin grilla CS, queda el del modelo)"
+        else:
+            # parsear los numeros de la linea y mapearlos a los candidatos en orden
+            crudos = text.replace(",", " ").split()
+            cuotas = []
+            for c in crudos:
+                try:
+                    cuotas.append(float(c))
+                except ValueError:
+                    cuotas.append(None)
+            pares = [(candidatos[i], cuotas[i]) for i in range(min(len(candidatos), len(cuotas)))
+                     if cuotas[i] is not None and cuotas[i] > 1.0]
+            if not pares:
+                send(chat_id, f"No entendi las cuotas. Mandame {len(candidatos)} numeros separados por espacio, en el orden:\n{'  '.join(candidatos)}\n(o 'saltar')")
+                return
+            # el mercado: marcador mas probable = el de menor cuota
+            final = min(pares, key=lambda x: x[1])[0]
+            # guardar la grilla cargada (string) para backtest
+            grilla_str = " ".join(f"{m}:{c}" for m, c in pares)
+            sheets_mundial.registrar_cs_grilla(eq1, eq2, grilla_str)
+            # sobreescribir el pick guardado en F/G con el del mercado
+            fg1, fg2 = map(int, final.split("-"))
+            sheets_mundial.registrar_prediccion(eq1, eq2, fg1, fg2)
+            nota = "(del mercado CS)" if final == model_pick else f"(mercado CS; el modelo decia {model_pick})"
+
         estado["step"] = "esperar_pts_lider"
         pts_mios = estado["pts_mios"]
-        send(chat_id, f"Tus puntos (de la planilla): {pts_mios}\nCuantos tiene el primero?")
+        send(chat_id,
+             f">>> JUGÁ: {con_equipos(final)}  {nota}\n\n"
+             f"Tus puntos (de la planilla): {pts_mios}\nCuantos tiene el primero?")
         return
 
     if estado.get("step") == "esperar_pts_lider":
@@ -464,9 +474,7 @@ def procesar_mensaje(chat_id, text):
         pregunta = PASOS[step][1].format(equipo1=estado["equipo1"], equipo2=estado["equipo2"])
         send(chat_id, pregunta)
     else:
-        avisos, pick1, pick2, con_equipos, pred_g1, pred_g2 = build_resultado(estado)
-        # UN SOLO RESULTADO, al toque: "JUGÁ ESTO"
-        send(chat_id, f">>> JUGÁ: {con_equipos(pick1)}")
+        avisos, pick1, top6, con_equipos, pred_g1, pred_g2 = build_resultado(estado)
         if avisos:
             send(chat_id, avisos)
         # calcular mis puntos desde la planilla
@@ -481,27 +489,27 @@ def procesar_mensaje(chat_id, text):
         resultados_con_pred = sheets_mundial.leer_resultados_con_pred()
         pts_mios = sum(_calc_pts(r) for r in resultados_con_pred)
 
-        # Guardar prediccion en columna F/G de la planilla
         eq1 = estado.get("equipo1", "")
         eq2 = estado.get("equipo2", "")
-        if eq1 and eq2 and pred_g1 is not None and pred_g2 is not None:
-            sheets_mundial.registrar_prediccion(eq1, eq2, pred_g1, pred_g2)
 
         estados[chat_id] = {
-            "step": "esperar_cs_top1",
+            "step": "esperar_cs_grilla",
             "pick1": pick1,
-            "pick2": pick2,
+            "top6": top6,
             "con_equipos": con_equipos,
             "pts_mios": pts_mios,
             "equipo1": eq1,
             "equipo2": eq2,
             "pred_g1": pred_g1,
             "pred_g2": pred_g2,
-            "cs_top1_marcador": pick1,
-            "cs_top2_marcador": pick2,
         }
-        send(chat_id, f"(registro, opcional) Cuota Correct Score {pick1}? Mandala o 'saltar'.")
-        print(f"[OK] Pick enviado: {estado['equipo1']} vs {estado['equipo2']} -> {pick1}")
+        send(chat_id,
+             f"Modelo (referencia): {con_equipos(pick1)}\n\n"
+             f"Pasame las cuotas Correct Score de Bet365 de estos {len(top6)} marcadores, "
+             f"en este orden y separadas por espacio (o 'saltar'):\n\n"
+             f"{'   '.join(top6)}\n\n"
+             f"Ej: 7.5 6 9 7 11 12")
+        print(f"[OK] Pidiendo grilla CS: {estado['equipo1']} vs {estado['equipo2']} (modelo {pick1})")
 
 # ==================== MONITOR AUTOMATICO ====================
 
