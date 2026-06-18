@@ -239,6 +239,31 @@ def ranking_puntos_esperados(ranking):
     return out
 
 
+def pick_diferenciacion(dist, beta=2.0, max_rank=6):
+    """
+    Capa de VARIANZA para jugar a ganar (no a colocar) desde atras en un pozo top-N.
+
+    dist: [(marcador_str, prob_fraccion), ...] (distribucion del modelo o del mercado).
+    Devuelve el marcador que maximiza  prob * (1 - popularidad_estimada_del_campo).
+
+    El campo (sobre todo los que cargan de antemano) se amontona en el "chalk":
+    el marcador mas obvio del favorito. Estimamos esa popularidad como prob^beta
+    normalizada (beta>1 => el campo se concentra mas que la probabilidad real).
+    Asi el pick se corre del #1 amontonado hacia un marcador todavia probable pero
+    menos elegido: si pega, te separa de la manada.
+
+    max_rank: solo considera los marcadores mas probables (no se va a un 3%).
+    """
+    if not dist:
+        return None
+    top = sorted(dist, key=lambda x: -x[1])[:max_rank]
+    raw = [(s, p ** beta) for s, p in top]
+    Z = sum(v for _, v in raw) or 1.0
+    pop = {s: v / Z for s, v in raw}
+    scored = sorted(((s, p * (1 - pop[s])) for s, p in top), key=lambda x: -x[1])
+    return scored[0][0]
+
+
 if __name__ == "__main__":
     import sys
     sys.stdout.reconfigure(encoding="utf-8")

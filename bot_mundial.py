@@ -2,7 +2,9 @@
 import os, sys, time, threading, requests
 from datetime import datetime
 from pytz import timezone
-from modelo import predecir, ranking_puntos_esperados   # Poisson + DC + prior + EV de quiniela
+from modelo import predecir, ranking_puntos_esperados, pick_diferenciacion   # Poisson + DC + prior + EV + capa de varianza
+
+BETA_VAR = 2.5   # intensidad de la capa de diferenciacion (mas alto = mas contrarian)
 import historial              # guarda las predicciones (volumen Railway)
 import sheets_mundial         # lee resultados que el usuario carga a mano en Google Sheets
 import sync_resultados        # sincroniza resultados finales desde the-odds-api
@@ -62,8 +64,9 @@ def build_resultado(estado):
     # se juega el marcador EXACTO mas probable -> caza los 12 puntos que trepan.
     # Si el usuario carga la grilla de Correct Score, el pick final sale del
     # mercado (mejor calibrado para este Mundial que el prior historico).
-    pick1 = ranking[0][0]            # marcador mas probable del modelo (referencia / fallback)
+    pick1 = ranking[0][0]            # marcador mas probable del modelo (chalk / referencia)
     top6 = [s for s, _ in ranking[:6]]  # candidatos para pedir las cuotas CS
+    dist8 = [(s, p / 100.0) for s, p in ranking[:8]]  # distribucion para la capa de varianza
 
     # registrar la prediccion (para luego preguntar el resultado)
     fecha = estado.get("fecha_partido")
@@ -133,7 +136,7 @@ def build_resultado(estado):
             "Confirmá cuando estés listo para hacer el cambio."
         )
 
-    return "\n".join(avisos) if avisos else "", pick1, top6, con_equipos, pg1, pg2
+    return "\n".join(avisos) if avisos else "", pick1, top6, con_equipos, pg1, pg2, dist8
 
 
 def parse_marcador(text):
@@ -368,8 +371,10 @@ def procesar_mensaje(chat_id, text):
         eq2 = estado.get("equipo2", "")
 
         if text.lower() in ("saltar", "s", "-", "skip"):
-            final = model_pick   # sin grilla -> recomendacion = pick del modelo
-            nota = "(modelo)"
+            # sin grilla -> usar la distribucion del modelo
+            dist = estado.get("dist8", [])
+            chalk = model_pick
+            fuente = "modelo"
         else:
             # parsear los numeros de la linea y mapearlos a los candidatos en orden
             crudos = text.replace(",", " ").split()
@@ -384,20 +389,33 @@ def procesar_mensaje(chat_id, text):
             if not pares:
                 send(chat_id, f"No entendi las cuotas. Mandame {len(candidatos)} numeros separados por espacio, en el orden:\n{'  '.join(candidatos)}\n(o 'saltar')")
                 return
-            # el mercado: marcador mas probable = el de menor cuota
-            final = min(pares, key=lambda x: x[1])[0]
+            # distribucion del mercado: prob ~ 1/cuota (normalizada entre las cargadas)
+            inv = [(m, 1.0 / c) for m, c in pares]
+            Z = sum(v for _, v in inv) or 1.0
+            dist = [(m, v / Z) for m, v in inv]
+            chalk = min(pares, key=lambda x: x[1])[0]   # mas probable del mercado (menor cuota)
             grilla_str = " ".join(f"{m}:{c}" for m, c in pares)
             sheets_mundial.registrar_cs_grilla(eq1, eq2, grilla_str)
-            nota = "(modelo+mercado coinciden)" if final == model_pick else f"(mercado; el modelo decia {model_pick})"
+            fuente = "mercado"
 
-        # guardar la recomendacion del bot en columna N (para comparar vs lo que jugas)
-        sheets_mundial.registrar_pick_bot(eq1, eq2, final)
+        # CAPA DE VARIANZA: marcador para jugar a ganar desde atras (mas riesgo)
+        var_pick = pick_diferenciacion(dist, beta=BETA_VAR) or chalk
 
-        estado["recomendacion"] = final
+        # guardar el pick principal del bot (el mas probable) en columna N
+        sheets_mundial.registrar_pick_bot(eq1, eq2, chalk)
+
+        if var_pick == chalk:
+            cuerpo = f"Más probable ({fuente}): {con_equipos(chalk)}\n(no hay alternativa de varianza que valga la pena)"
+        else:
+            cuerpo = (f"Más probable ({fuente}): {con_equipos(chalk)}   <- 'ok' juega esto\n"
+                      f"Diferenciación (más riesgo): {con_equipos(var_pick)}   <- mandá '{var_pick}' si te la jugás")
+
+        estado["recomendacion"] = chalk          # 'ok' juega la mas probable (segura)
+        estado["var_pick"] = var_pick
         estado["step"] = "esperar_jugada"
         send(chat_id,
-             f">>> El bot recomienda: {con_equipos(final)}  {nota}\n\n"
-             f"¿Qué jugás vos? Mandá tu marcador (ej: 2-0) o 'ok' para aceptar la recomendación.")
+             f"{cuerpo}\n\n"
+             f"¿Qué jugás vos? Mandá tu marcador o 'ok'.")
         return
 
     if estado.get("step") == "esperar_jugada":
@@ -498,7 +516,7 @@ def procesar_mensaje(chat_id, text):
         pregunta = PASOS[step][1].format(equipo1=estado["equipo1"], equipo2=estado["equipo2"])
         send(chat_id, pregunta)
     else:
-        avisos, pick1, top6, con_equipos, pred_g1, pred_g2 = build_resultado(estado)
+        avisos, pick1, top6, con_equipos, pred_g1, pred_g2, dist8 = build_resultado(estado)
         if avisos:
             send(chat_id, avisos)
         # calcular mis puntos desde la planilla
@@ -520,6 +538,7 @@ def procesar_mensaje(chat_id, text):
             "step": "esperar_cs_grilla",
             "pick1": pick1,
             "top6": top6,
+            "dist8": dist8,
             "con_equipos": con_equipos,
             "pts_mios": pts_mios,
             "equipo1": eq1,
