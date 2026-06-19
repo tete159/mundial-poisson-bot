@@ -2,7 +2,7 @@
 import os, sys, time, threading, requests
 from datetime import datetime
 from pytz import timezone
-from modelo import predecir, ranking_puntos_esperados, pick_diferenciacion   # Poisson + DC + prior + EV + capa de varianza
+from modelo import predecir, ranking_puntos_esperados, pick_diferenciacion, pick_con_boost_11   # Poisson + DC + prior + EV + capa de varianza + boost 1-1
 
 BETA_VAR = 2.5   # intensidad de la capa de diferenciacion (mas alto = mas contrarian)
 import historial              # guarda las predicciones (volumen Railway)
@@ -64,7 +64,8 @@ def build_resultado(estado):
     # se juega el marcador EXACTO mas probable -> caza los 12 puntos que trepan.
     # Si el usuario carga la grilla de Correct Score, el pick final sale del
     # mercado (mejor calibrado para este Mundial que el prior historico).
-    pick1 = ranking[0][0]            # marcador mas probable del modelo (chalk / referencia)
+    # pick del modelo, con 1-1 reforzado en partidos parejos (anomalia del torneo)
+    pick1 = pick_con_boost_11(ranking, o1, ox, o2)   # = ranking[0][0] salvo en parejos, donde puede dar 1-1
     top6 = [s for s, _ in ranking[:6]]  # candidatos para pedir las cuotas CS
     dist8 = [(s, p / 100.0) for s, p in ranking[:8]]  # distribucion para la capa de varianza
 
