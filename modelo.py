@@ -264,6 +264,37 @@ def pick_diferenciacion(dist, beta=2.0, max_rank=6):
     return scored[0][0]
 
 
+RATIO_SEP = 0.82   # un marcador "casi empatado" con el chalk si tiene >= 82% de su prob
+
+
+def pick_separacion(dist, ratio=RATIO_SEP):
+    """
+    Detecta "spots de separacion gratis": cuando el mercado deja DOS (o mas)
+    marcadores casi empatados en probabilidad, el campo casual se amontona en el
+    mas obvio (suele lowballear los goles del favorito: juega 1-0, 0-1, 2-0).
+    Entre los casi-empatados (prob >= ratio * prob_del_chalk) elegimos el de MAS
+    goles totales -> mismo precio, menos jugado. Si pega, te separa de la manada.
+
+    Devuelve (marcador_str, hay_separacion):
+      hay_separacion=True solo si el elegido NO es el chalk (vale la pena avisar).
+    Casos reales: 2-0 vs 3-0 (Ecuador) y 0-1 vs 0-2 (Japon) -> sugiere 3-0 / 0-2.
+    """
+    if not dist:
+        return None, False
+    top = sorted(dist, key=lambda x: -x[1])
+    chalk_s, chalk_p = top[0]
+    if chalk_p <= 0:
+        return chalk_s, False
+    casi = [(s, p) for s, p in top if p >= ratio * chalk_p]
+
+    def goles(s):
+        a, b = map(int, s.split("-"))
+        return a + b
+
+    elegido = max(casi, key=lambda sp: (goles(sp[0]), sp[1]))[0]
+    return elegido, (elegido != chalk_s)
+
+
 # --- Ajuste por anomalia del torneo: el 1-1 en partidos parejos ---
 # El Mundial 2026 expandido (48 equipos) viene con el 1-1 saliendo ~3x lo normal
 # (26% vs ~10% historico) y CONCENTRADO en los partidos PAREJOS. El modelo de

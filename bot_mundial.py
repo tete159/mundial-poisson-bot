@@ -2,7 +2,7 @@
 import os, sys, time, threading, requests
 from datetime import datetime
 from pytz import timezone
-from modelo import predecir, ranking_puntos_esperados, pick_diferenciacion, pick_con_boost_11   # Poisson + DC + prior + EV + capa de varianza + boost 1-1
+from modelo import predecir, ranking_puntos_esperados, pick_con_boost_11, pick_separacion   # Poisson + DC + prior + boost 1-1 + aviso de separacion
 
 BETA_VAR = 2.5   # intensidad de la capa de diferenciacion (mas alto = mas contrarian)
 import historial              # guarda las predicciones (volumen Railway)
@@ -399,19 +399,28 @@ def procesar_mensaje(chat_id, text):
             sheets_mundial.registrar_cs_grilla(eq1, eq2, grilla_str)
             fuente = "mercado"
 
-        # CAPA DE VARIANZA: marcador para jugar a ganar desde atras (mas riesgo)
-        var_pick = pick_diferenciacion(dist, beta=BETA_VAR) or chalk
+        # AVISO DE SEPARACION: si el mercado deja dos marcadores casi empatados,
+        # avisa y sugiere el menos obvio (mas goles) -> diferenciacion casi gratis.
+        sep_pick, hay_sep = pick_separacion(dist)
 
         # guardar el pick principal del bot (el mas probable) en columna N
         sheets_mundial.registrar_pick_bot(eq1, eq2, chalk)
 
-        if var_pick == chalk:
-            cuerpo = f"Más probable ({fuente}): {con_equipos(chalk)}\n(no hay alternativa de varianza que valga la pena)"
+        pdict = dict(dist)
+        if hay_sep:
+            pc = pdict.get(chalk, 0) * 100
+            ps = pdict.get(sep_pick, 0) * 100
+            cuerpo = (f"⚡ SPOT DE SEPARACIÓN — {chalk} y {sep_pick} casi empatados ({pc:.0f}% vs {ps:.0f}%)\n\n"
+                      f"Más probable ({fuente}): {con_equipos(chalk)}   <- 'ok'\n"
+                      f"Separarte (mismo precio, menos jugado): {con_equipos(sep_pick)}   <- mandá '{sep_pick}'\n"
+                      f"La manada se amontona en {chalk}; el {sep_pick} te separa casi gratis.")
+            var_pick = sep_pick
         else:
-            cuerpo = (f"Más probable ({fuente}): {con_equipos(chalk)}   <- 'ok' juega esto\n"
-                      f"Diferenciación (más riesgo): {con_equipos(var_pick)}   <- mandá '{var_pick}' si te la jugás")
+            cuerpo = (f"Más probable ({fuente}): {con_equipos(chalk)}   <- 'ok'\n"
+                      f"(no hay spot de separación: el chalk se despega del resto)")
+            var_pick = chalk
 
-        estado["recomendacion"] = chalk          # 'ok' juega la mas probable (segura)
+        estado["recomendacion"] = chalk          # 'ok' juega la mas probable
         estado["var_pick"] = var_pick
         estado["step"] = "esperar_jugada"
         send(chat_id,
