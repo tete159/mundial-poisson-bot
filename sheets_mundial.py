@@ -363,7 +363,7 @@ def actualizar_resumen():
         kpis = [
             ["RESUMEN DEL PRODE - MUNDIAL 2026", "", ""],
             [""],
-            ["Partidos jugados",  jugados,          f"de {TOTAL}"],
+            ["Partidos jugados",  jugados,          f"de {TOTAL}",  f"{round(jugados/TOTAL*100)}% del Mundial"],
             ["Mis puntos",        pts_yo,            ""],
             ["Puntos lider",      pts_lider_ultimo,  ""],
             ["Deficit",           deficit,           "pts atras"],
