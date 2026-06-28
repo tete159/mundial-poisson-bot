@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import os, sys, time, threading, requests
-from datetime import datetime
+from datetime import datetime, date
 from pytz import timezone
 from modelo import predecir, ranking_puntos_esperados, pick_con_boost_11, pick_separacion   # Poisson + DC + prior + boost 1-1 + aviso de separacion
 
@@ -26,6 +26,26 @@ ODDS_API_KEY = os.getenv("ODDS_API_KEY", "")
 ART          = timezone("America/Argentina/Buenos_Aires")
 
 estados = {}
+
+# Mata-mata: a partir de 16avos (28/06/2026) hay definicion por penales.
+# Si el pronostico es EMPATE, el Prode habilita el ganador por penales (+5 extra).
+INICIO_MATA_MATA = date(2026, 6, 28)
+
+
+def _es_eliminacion(fecha_partido):
+    """True si el partido es de fase eliminatoria (hay penales)."""
+    try:
+        return fecha_partido is not None and fecha_partido.date() >= INICIO_MATA_MATA
+    except AttributeError:
+        return False
+
+
+def _favorito(equipo1, equipo2, o1, o2):
+    """El favorito = el de menor cuota. Para sugerir el ganador por penales."""
+    if o1 is None or o2 is None:
+        return None
+    return equipo1 if o1 < o2 else equipo2
+
 
 PASOS = [
     ("o1",    "Cuota victoria {equipo1} (1)?"),
@@ -445,11 +465,19 @@ def procesar_mensaje(chat_id, text):
         jg1, jg2 = map(int, jugada.split("-"))
         sheets_mundial.registrar_prediccion(eq1, eq2, jg1, jg2)
 
+        # recordatorio de penales: en eliminacion, un EMPATE habilita +5 por el ganador de penales
+        nota_penales = ""
+        if jg1 == jg2 and _es_eliminacion(estado.get("fecha_partido")):
+            fav = _favorito(eq1, eq2, estado.get("o1"), estado.get("o2"))
+            if fav:
+                nota_penales = (f"\n\n💡 Empate en eliminación: en el Prode poné a {fav} "
+                                f"como ganador por penales (+5 gratis si se define ahí).")
+
         estado["step"] = "esperar_pts_lider"
         pts_mios = estado["pts_mios"]
         extra = "" if jugada == recom else f" (distinto a la recomendación {recom})"
         send(chat_id,
-             f"Anotado: jugás {con_equipos(jugada)}{extra}\n\n"
+             f"Anotado: jugás {con_equipos(jugada)}{extra}{nota_penales}\n\n"
              f"Tus puntos (de la planilla): {pts_mios}\nCuantos tiene el primero?")
         return
 
@@ -555,6 +583,9 @@ def procesar_mensaje(chat_id, text):
             "equipo2": eq2,
             "pred_g1": pred_g1,
             "pred_g2": pred_g2,
+            "o1": estado.get("o1"),
+            "o2": estado.get("o2"),
+            "fecha_partido": estado.get("fecha_partido"),
         }
         send(chat_id,
              f"Modelo (referencia): {con_equipos(pick1)}\n\n"
