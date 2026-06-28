@@ -131,30 +131,14 @@ def build_resultado(estado):
             "  4. Meta para ganar el Prode: ~5.4 pts/partido (Monte Carlo p99)\n\n"
             "No hace falta cambiar nada todavía — solo diagnosticar."
         )
-    if n_reales == 88:
-        avisos.append(
-            "🔬 FIN DE DIECISEISAVOS — recalibración con datos reales:\n\n"
-            "Ya tenés 16 partidos eliminatorios de este Mundial para comparar\n"
-            "contra el histórico de 9 mundiales.\n\n"
-            "Qué revisar:\n"
-            "  1. ¿Cuántos fueron a penales? Histórico: ~22% (3-4 de 16)\n"
-            "  2. ¿Muchos 0-0 y 1-1? → subir más el RHO negativo\n"
-            "  3. ¿Muchos goles? → bajar W_HIST, confiar más en las cuotas\n"
-            "  4. Quedan octavos + cuartos + semis + final = 15 partidos clave\n\n"
-            "Confirmá para hacer el ajuste fino antes de octavos."
-        )
     if n_reales == 72:
         avisos.append(
-            "⚠️ FASE ELIMINATORIA — momento de ajustar el modelo:\n\n"
-            "Análisis de 9 mundiales (144 partidos eliminatorios) muestra:\n"
-            "• 2-1 y 1-0 = 43% de todos los resultados (igual que grupos)\n"
-            "• Empates son más frecuentes: 22% van a penales vs 18% en grupos\n"
-            "• 0-0 aparece mucho más (8% de partidos) — juego más defensivo\n"
-            "• Cuartos y la Final son las fases con más penales (~31-33%)\n\n"
-            "Ajustes sugeridos en modelo.py:\n"
-            "  RHO = -0.12  (más negativo → más empates bajos)\n"
-            "  W_HIST = 0.50  (subir prior → más peso a la historia)\n\n"
-            "Confirmá cuando estés listo para hacer el cambio."
+            "🏆 ARRANCA EL MATA-MATA — reglas nuevas:\n\n"
+            "• El resultado vale a los 120' (no 90, no penales).\n"
+            "• Si pronosticás EMPATE, sumás +5 acertando el ganador por penales\n"
+            "  → el empate es la jugada de MÁS techo en la eliminatoria.\n\n"
+            "El modelo NO se toca (RHO y W_HIST son inertes, ya probado).\n"
+            "El boost del 1-1 sigue activo; a vigilar el 0-0 en los primeros cruces."
         )
 
     return "\n".join(avisos) if avisos else "", pick1, top6, con_equipos, pg1, pg2, dist8
@@ -464,20 +448,46 @@ def procesar_mensaje(chat_id, text):
         # lo que REALMENTE jugas va a F/G (es lo que mide tu tracking)
         jg1, jg2 = map(int, jugada.split("-"))
         sheets_mundial.registrar_prediccion(eq1, eq2, jg1, jg2)
+        extra = "" if jugada == recom else f" (distinto a la recomendación {recom})"
 
-        # recordatorio de penales: en eliminacion, un EMPATE habilita +5 por el ganador de penales
-        nota_penales = ""
+        # EMPATE en eliminacion -> preguntar el ganador por penales (+5) y guardarlo
         if jg1 == jg2 and _es_eliminacion(estado.get("fecha_partido")):
             fav = _favorito(eq1, eq2, estado.get("o1"), estado.get("o2"))
-            if fav:
-                nota_penales = (f"\n\n💡 Empate en eliminación: en el Prode poné a {fav} "
-                                f"como ganador por penales (+5 gratis si se define ahí).")
+            estado["fav_penales"] = fav
+            estado["step"] = "esperar_penales"
+            sug = f"  (te sugiero {fav}, el favorito)" if fav else ""
+            send(chat_id,
+                 f"Anotado: jugás {con_equipos(jugada)}{extra}\n\n"
+                 f"💡 Empate en eliminación → +5 si acertás el ganador por PENALES.\n"
+                 f"¿Quién pasa por penales?{sug}\n"
+                 f"(escribí el equipo, o 'ok' para el favorito)")
+            return
 
         estado["step"] = "esperar_pts_lider"
         pts_mios = estado["pts_mios"]
-        extra = "" if jugada == recom else f" (distinto a la recomendación {recom})"
         send(chat_id,
-             f"Anotado: jugás {con_equipos(jugada)}{extra}{nota_penales}\n\n"
+             f"Anotado: jugás {con_equipos(jugada)}{extra}\n\n"
+             f"Tus puntos (de la planilla): {pts_mios}\nCuantos tiene el primero?")
+        return
+
+    if estado.get("step") == "esperar_penales":
+        eq1 = estado.get("equipo1", "")
+        eq2 = estado.get("equipo2", "")
+        fav = estado.get("fav_penales")
+        t = text.strip().lower()
+        if t in ("ok", "si", "sí", "dale", "listo", "="):
+            ganador = fav or eq1
+        elif t and t in eq1.lower():
+            ganador = eq1
+        elif t and t in eq2.lower():
+            ganador = eq2
+        else:
+            ganador = text.strip()
+        sheets_mundial.registrar_ganador_penales(eq1, eq2, ganador)
+        estado["step"] = "esperar_pts_lider"
+        pts_mios = estado["pts_mios"]
+        send(chat_id,
+             f"Penales: {ganador} ✅  (+5 si se define ahí)\n\n"
              f"Tus puntos (de la planilla): {pts_mios}\nCuantos tiene el primero?")
         return
 

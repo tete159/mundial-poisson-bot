@@ -267,6 +267,33 @@ def registrar_pick_bot(equipo1, equipo2, pick_str):
         print(f"[ERROR sheets pick_bot] {e}")
 
 
+def registrar_ganador_penales(equipo1, equipo2, ganador):
+    """Guarda el equipo elegido como ganador por penales en columna AA (mata-mata).
+    Solo aplica a empates de fase eliminatoria (suma +5 en el Prode si acierta).
+    (V-Z las usa el usuario para sus propias notas; por eso va en AA.)"""
+    ws = _abrir()
+    if ws is None:
+        return
+    try:
+        registros = ws.get_all_records(expected_headers=[])
+        # asegurar encabezado de columna AA una sola vez
+        header = ws.row_values(1)
+        if len(header) < 27 or str(header[26:27]) != "['Ganador penales']":
+            try:
+                ws.update(values=[["Ganador penales"]], range_name="AA1")
+            except Exception:
+                pass
+        for i, r in enumerate(registros, start=2):
+            e1 = str(r.get("Equipo 1", "")).strip().lower()
+            e2 = str(r.get("Equipo 2", "")).strip().lower()
+            if e1 == equipo1.strip().lower() and e2 == equipo2.strip().lower():
+                ws.update(values=[[ganador]], range_name=f"AA{i}")
+                print(f"[Sheets] Ganador penales {ganador} guardado para {equipo1} vs {equipo2}")
+                return
+    except Exception as e:
+        print(f"[ERROR sheets penales] {e}")
+
+
 def registrar_cs_grilla(equipo1, equipo2, grilla_str):
     """Guarda la grilla de Correct Score cargada (string '1-0:7.5 2-0:6 ...') en columna M.
     Sirve para backtestear despues mercado vs modelo."""
