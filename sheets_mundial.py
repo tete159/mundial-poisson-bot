@@ -328,6 +328,7 @@ def actualizar_resumen():
         jugados = 0
         pts_yo = 0
         pts_lider_ultimo = 0
+        pts_decimo_ultimo = 0
         dist = {0: 0, 2: 0, 5: 0, 7: 0, 12: 0}
 
         for r in rows:
@@ -350,30 +351,39 @@ def actualizar_resumen():
                     pts_lider_ultimo = int(pl)
                 except ValueError:
                     pass
+            d10 = r[23].strip() if len(r) > 23 else ""   # columna X = puntos 10mo
+            if d10:
+                try:
+                    pts_decimo_ultimo = int(float(d10.replace(",", ".")))
+                except ValueError:
+                    pass
 
         TOTAL = 104
         restantes = max(TOTAL - jugados, 1)
         deficit = pts_lider_ultimo - pts_yo
         prom_yo = round(pts_yo / jugados, 2) if jugados else 0
         prom_lider = round(pts_lider_ultimo / jugados, 2) if jugados else 0
-        META = 457
-        prom_necesario = round((META - pts_yo) / restantes, 2)
-        proyeccion = round(pts_yo + prom_yo * restantes)
+
+        # CORTE TOP-10 (el objetivo real): gap al 10mo y ritmo necesario
+        gap_decimo = pts_decimo_ultimo - pts_yo
+        prom_decimo = round(pts_decimo_ultimo / jugados, 2) if jugados else 0
+        proy_decimo = pts_decimo_ultimo + prom_decimo * restantes  # si el corte mantiene ritmo
+        prom_nec_top10 = round((proy_decimo - pts_yo) / restantes, 2) if pts_decimo_ultimo else 0
 
         kpis = [
             ["RESUMEN DEL PRODE - MUNDIAL 2026", "", ""],
             [""],
             ["Partidos jugados",  jugados,          f"de {TOTAL}",  f"{round(jugados/TOTAL*100)}% del Mundial"],
             ["Mis puntos",        pts_yo,            ""],
-            ["Puntos lider",      pts_lider_ultimo,  ""],
-            ["Deficit",           deficit,           "pts atras"],
             ["Promedio mio",      prom_yo,           "pts/partido"],
-            ["Promedio lider",    prom_lider,        "pts/partido"],
             [""],
-            ["META para ganar",   META,              "pts (top 50%)"],
-            ["Prom. necesario",   prom_necesario,    "pts/partido restantes"],
-            ["Proyeccion final",  proyeccion,        "pts (a ritmo actual)"],
-            ["Diferencia vs meta", proyeccion - META, "pts"],
+            ["CORTE TOP-10 (lo que paga)", "", ""],
+            ["Puntos 10mo",       pts_decimo_ultimo, ""],
+            ["GAP al 10mo",       gap_decimo,        "pts para entrar"],
+            ["Promedio 10mo",     prom_decimo,       "pts/partido"],
+            ["Prom. necesario top-10", prom_nec_top10, "pts/part restantes (si el 10mo mantiene ritmo)"],
+            [""],
+            ["Referencia - lider", pts_lider_ultimo, f"(gap {deficit})"],
             [""],
             ["DISTRIBUCION DE PUNTOS", "", ""],
             ["Exacto (12p)", "Result+goles (7p)", "Solo result (5p)", "Un gol (2p)", "Nada (0p)"],
