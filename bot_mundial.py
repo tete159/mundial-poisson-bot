@@ -411,17 +411,33 @@ def procesar_mensaje(chat_id, text):
         sheets_mundial.registrar_pick_bot(eq1, eq2, chalk)
 
         pdict = dict(dist)
+        es_elim = _es_eliminacion(estado.get("fecha_partido"))
+
+        def _nota_penales(marcador):
+            """Devuelve nota de penales si es eliminación y el marcador es empate."""
+            if not es_elim:
+                return ""
+            try:
+                a, b = map(int, marcador.split("-"))
+                if a == b:
+                    return "\n⚽ Empate en eliminación → te pregunto quién gana por penales (+5 pts)"
+            except Exception:
+                pass
+            return ""
+
         if hay_sep:
             pc = pdict.get(chalk, 0) * 100
             ps = pdict.get(sep_pick, 0) * 100
+            nota = _nota_penales(sep_pick)
             cuerpo = (f"⚡ SPOT DE SEPARACIÓN — {chalk} y {sep_pick} casi empatados ({pc:.0f}% vs {ps:.0f}%)\n\n"
                       f"Más probable ({fuente}): {con_equipos(chalk)}   <- 'ok'\n"
                       f"Separarte (mismo precio, menos jugado): {con_equipos(sep_pick)}   <- mandá '{sep_pick}'\n"
-                      f"La manada se amontona en {chalk}; el {sep_pick} te separa casi gratis.")
+                      f"La manada se amontona en {chalk}; el {sep_pick} te separa casi gratis.{nota}")
             var_pick = sep_pick
         else:
+            nota = _nota_penales(chalk)
             cuerpo = (f"Más probable ({fuente}): {con_equipos(chalk)}   <- 'ok'\n"
-                      f"(no hay spot de separación: el chalk se despega del resto)")
+                      f"(no hay spot de separación: el chalk se despega del resto){nota}")
             var_pick = chalk
 
         estado["recomendacion"] = chalk          # 'ok' juega la mas probable
